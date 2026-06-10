@@ -1,4 +1,4 @@
-# 🎭 Noisy | The Mood-Mochi
+# **🎭 Noisy | The Mood-Mochi**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Hardware: Raspberry Pi Zero 2 WH](https://img.shields.io/badge/hardware-Pi%20Zero%202_WH-blue)
@@ -9,7 +9,7 @@
 
 ---
 
-## 🌟 The Concept
+## **🌟 The Concept**
 Noisy is not an AI assistant like Alexa or Siri. It is a **digital shadow**. 
 Sitting in its holographic prism, Noisy observes the vibrations of your room:
 - It **headbangs** when you blast Heavy Metal. 🤘
@@ -19,7 +19,7 @@ Sitting in its holographic prism, Noisy observes the vibrations of your room:
 
 ---
 
-## ✨ Key Features
+## **✨ Key Features**
 - **🧠 Real-time Emotion Detection:** Powered by `Sherpa-ONNX` & `SenseVoice`. Recognizes laughter, applause, music genres, and distinct emotions without heavy LLMs.
 - **🎨 Fluid Rendering:** Uses `PyCairo` for anti-aliased vector graphics for that smooth "Mochi-Blob" look.
 - **🌡️ Thermal Awareness:** A unique software governor maps real-time CPU temperatures to character behavior (Adaptive Fatigue).
@@ -28,7 +28,7 @@ Sitting in its holographic prism, Noisy observes the vibrations of your room:
 
 ---
 
-## 🛠 Hardware Stack
+## **🛠 Hardware Stack**
 - **Host:** Raspberry Pi Zero 2 WH (DietPi Headless)
 - **Display:** Waveshare GamePi13 (ST7789, 240x240 SPI)
 - **Optics:** Prism Cube for the floating hologram effect
@@ -36,7 +36,7 @@ Sitting in its holographic prism, Noisy observes the vibrations of your room:
 
 ---
 
-## 🚀 Getting Started
+## **🚀 Getting Started**
 
 ### Prerequisites
 - A Raspberry Pi Zero 2 WH with DietPi installed.
@@ -48,10 +48,32 @@ Sitting in its holographic prism, Noisy observes the vibrations of your room:
    ```bash
    git clone https://github.com/Smilez1985/Noisy.git
    cd Noisy
-   sudo bash install.sh
    ```
    
 The installer configures all services, shared memory segments, and the Noisy CLI (noisy log, noisy debug)
 
-🤝 Collaboration (Human in the Loop)
+Run the installer: The script sets up cpufreq rules for frequency capping, installs dependencies, and configures systemd autostart.
+
+ ```
+chmod +x install.sh
+sudo bash install.sh
+ ```
+
+Debug Mode: Test if the AI is recognizing your sounds correctly before starting the full experience:
+ ```
+python3 noisy_debug.py
+ ```
+**🎨 Customization & Vibe Coding**
+Noisy was built for makers. You can change its personality without touching a single line of core logic:
+
+Modify Moods: Edit vibe_db.json to map different sounds (e.g., "Dog Bark" or "Fart") to unique animations.
+New Shapes: Modify the draw_mochi function in noisy_main.py to turn the blob into a tree, a flame, or any other vector shape.
+
+**⚖️ Philosophy**
+Noisy is an experiment in Ambient Consciousness. It is designed to be transparent: no cloud data, no hidden tracking. It exists only to mirror your vibe—it is a "Type File" that evolves with your environment.
+
+**🤝 Collaboration (Human in the Loop)**
 Noisy was created through Vibe Coding—a synergy of human vision and AI orchestration during an intense session where hardware and code fused into something "living"...
+
+Made with **❤️** by *Smilez1985*
+
