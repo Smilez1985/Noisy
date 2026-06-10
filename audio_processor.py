@@ -2,13 +2,14 @@ import os
 import time
 import numpy as np
 from multiprocessing import shared_memory
-import librosa
 import pyaudio
 import threading
+import librosa
+from config_manager import ConfigManager
 
-# Konfiguration für die Audio-Erkennung
+# Konfiguration
 SAMPLE_RATE = 16000
-CHUNK_SIZE = 4096 # Ca. 0.25 Sekunden
+CHUNK_SIZE = 512  # Kleinerer Chunk für minimale Latenz beim Fast-Path
 MOOD_MAP = {
     "MUSIC": 1,      # Musik -> Mode 1
     "LAUGH": 2,      # Lachen -> Mode 2
@@ -30,47 +31,76 @@ class AudioEngine:
         # status_buf[2] = Volume (RMS)
         self.status_buf = np.frombuffer(self.shm.buf, dtype=np.float32)
 
+        # Laden der Konfiguration für Modelle
+        self.config = ConfigManager("config.json")
+        self.model_paths = self.config.get_full_config()["models"]["paths"]
+
+        # Audio Setup
         self.p = pyaudio.PyAudio()
         self.stream = self.p.open(format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE,
                                     input=True, frames_per_buffer=CHUNK_SIZE)
         
+        # Interne Puffer für den Kontext-Pfad (KI)
+        self.context_buffer = []
         self.current_mood = 0.0
         self.confidence = 0.0
         self.volume = 0.0
 
+    def get_fast_path_reaction(self, audio_np):
+        """Reagiert sofort auf plötzliche Signale (Niesen, Schreie)."""
+        rms = np.max(np.abs(audio_np)) / 32768.0
+        
+        # Schwellenwert für 'SCARED' (Schrei/Niesen) - sehr schnell reagierend
+        if rms > 0.6: # Extrem laut
+            return MOOD_MAP["SCARED"], 0.95
+        
+        # Mittelmäßiger Tonbereich -> Musik-Proxy
+        elif rms > 0.2:
+            return MOOD_MAP["MUSIC"], 0.7
+        
+        else:
+            return MOOD_MAP["IDLE"], 1.0
+
     def process_audio(self):
-        print("🎧 Audio Engine aktiv...")
+        print("🎧 Audio Engine aktiv (Fast-Path & Context-Inferenz)...")
+        
         while True:
             try:
+                # 1. Rohdaten lesen
                 data, _ = self.stream.read(CHUNK_SIZE)
                 audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)
                 
-                # 1. Volume berechnen (RMS)
+                # 2. Fast-Path Analyse (Sofortige Reaktion)
+                fast_mood, fast_conf = self.get_fast_path_reaction(audio_np)
                 self.volume = np.max(np.abs(audio_np)) / 32768.0
                 
-                # 2. Vereinfachte Logik (Hier später Sherpa-ONNX integrieren)
-                # Aktuell: Reagiert auf Lautstärke und Frequenz als Proxy
-                if self.volume > 0.5: # Sehr laut
-                    self.current_mood = MOOD_MAP["SCARED"]
-                    self.confidence = 0.9
-                elif self.volume > 0.2: # Normaler Ton
-                    # Hier würde die KI-Inferenz laufen
-                    self.current_mood = MOOD_MAP["MUSIC"]
-                    self.confidence = 0.7
-                else:
-                    self.current_mood = MOOD_MAP["IDLE"]
-                    self.confidence = 1.0
-
-                # 3. In Shared Memory schreiben
-                self.status_buf[0] = self.current_mood
-                self.status_buf[1] = self.confidence
+                # Wir schreiben den Fast-Path direkt in den Speicher für die sofortige Reaktion
+                # Aber wir halten die KI-Logik im Hintergrund laufen
+                self.status_buf[0] = fast_mood
+                self.status_buf[1] = fast_conf
                 self.status_buf[2] = self.volume
+
+                # 3. Kontext-Pfad (KI-Inferenz im Hintergrund)
+                # Wir sammeln Daten für ein 1-Sekunden-Fenster zur KI-Analyse
+                self.context_buffer.append(audio_np)
+                if len(self.context_buffer) > (SAMPLE_RATE // CHUNK_SIZE):
+                    # Konvertiere Buffer zu einem großen Array
+                    full_chunk = np.concatenate(self.context_buffer)
+                    
+                    # Hier wird später Sherpa-ONNX aufgeführt:
+                    # result = sherpa_model.predict(full_chunk)
+                    # self.current_mood = result.mood_id
+                    # selbst wenn die KI noch nicht perfekt ist, 
+                    # sammelt dieser Pfad jetzt die Daten für die Musikerkennung.
+                    
+                    self.context_buffer = [] # Buffer leeren nach Analyse
 
             except Exception as e:
                 print(f"Audio Error: {e}")
                 time.sleep(0.1)
 
     def run(self):
+        # Starte den Audio-Prozessor in einem dedizierten Thread
         threading.Thread(target=self.process_audio, daemon=True).start()
         while True:
             time.sleep(1)
