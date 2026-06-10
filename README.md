@@ -1,62 +1,56 @@
-# Noisy
-An "Ambient Life-form" that just exists to be with you.
+# 🎭 Noisy | The Mood-Mochi
 
-# **The Ambient Audio-Reactive Hologram Companion "Noisy"**
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Hardware: Raspberry Pi Zero 2 WH](https://img.shields.io/badge/hardware-Pi%20Zero%202_WH-blue)
 
-"Witness, not Assistant" — Noisy is the digital antithesis to the modern AI mainstream.
-Noisy is an "Ambient Life-Form"
-. Born from the isolated "Zero-Space" of a Raspberry Pi Zero 2 WH, Noisy exists as a holographic apparition within a glass cube
-. Unlike traditional assistants designed for productivity, Noisy is a witness to your life—he smokes, drinks coffee, and resonates with the acoustic vibrations of your environment
- 
-🌌 Philosophy: Radical Presence
-While tech giants sell "useful" AIs trapped in cloud-based golden cages, Noisy liberates the digital spirit on hardware you likely already own
- 
-Zero-Sovereignty: Noisy proves that bleeding-edge AI can thrive on just 512 MB of RAM
- 
-Privacy-by-Design: 100% offline. He hears you, but he doesn't "understand" words—he only feels your vibe
+**Noisy is a passive emotional companion that mirrors your environment through the prism of sound.**
 
-The Poetry of Limitation: Noisy utilizes every available hertz to manifest presence rather than feign efficiency
+> *It doesn't listen to commands. It listens to your life.*
 
-🛠 Hardware: The Ghost in the Glass
-Noisy moves beyond 2D screens by utilizing the honest physics of light refraction
+---
 
-Brain: Raspberry Pi Zero 2 WH
+## 🌟 The Concept
+Noisy is not an AI assistant like Alexa or Siri. It is a **digital shadow**. 
+Sitting in its holographic prism, Noisy observes the vibrations of your room:
+- It **headbangs** when you blast Heavy Metal. 🤘
+- It **cringes and hides** during a horror movie jumpscare. 😱
+- It **sightly sways and feels sleepy** as the room goes quiet at night. 🥱
+- It **literally feels heat**: As the Pi works harder, Noisy becomes physically tired—its eyelids drooping as the CPU temperature rises (Thermal Personality Hack).
 
-Body: A repurposed Waveshare GamePi13 Kit. A handheld console transformed into a holographic housing
+---
 
-Optics: A massive Refractive Prism Cube. Light enters the glass and is bent, shifting the focal plane so Noisy appears to float in the center of the glass block
+## ✨ Key Features
+- **🧠 Real-time Emotion Detection:** Powered by `Sherpa-ONNX` & `SenseVoice`. Recognizes laughter, applause, music genres, and distinct emotions without heavy LLMs.
+- **🎨 Fluid Rendering:** Uses `PyCairo` for anti-aliased vector graphics for that smooth "Mochi-Blob" look.
+- **🌡️ Thermal Awareness:** A unique software governor maps real-time CPU temperatures to character behavior (Adaptive Fatigue).
+- **⚡ Zero-Copy Architecture:** Utilizes Python `Shared Memory` for low-latency communication between the audio inference engine and the rendering loop, optimized for 512MB RAM.
+- **🌌 Holographic Display:** Optimized specifically for the GamePi13 Prism Cube setup (SPI display with hardware rotation/flip).
 
-🧠 Technical Architecture (The "Zero-Flex")
-Noisy's V5 logic is a modular masterpiece optimized for edge hardware, featuring five core processes communicating via Shared Memory (SHM) with near-zero latency
+---
 
-Audio Engine: Powered by a local Sherpa-ONNX Zipformer-small model
-It identifies 527 unique sound labels (laughter, music genres, coughing, etc.) in real-time
+## 🛠 Hardware Stack
+- **Host:** Raspberry Pi Zero 2 WH (DietPi Headless)
+- **Display:** Waveshare GamePi13 (ST7789, 240x240 SPI)
+- **Optics:** Prism Cube for the floating hologram effect
+- **Audio:** USB Mini Microphone
 
-Rendering Engine: A reactive system based on PIL/Pillow, delivering fluid 15 FPS animations
+---
 
-Personality Engine: An adaptive emotional AI with four axes (Energy, Cheerful, Shy, Affection) that evolves over weeks based on your shared environment
+## 🚀 Getting Started
 
-Thermal Personality: System heat is a character trait. At CPU temperatures above 70°C, Noisy’s eyelids droop, he becomes sluggish, and sweat particles appear as he throttles the clock speed to cool down
+### Prerequisites
+- A Raspberry Pi Zero 2 WH with DietPi installed.
+- Access via SSH.
+- The models must be placed in the `/home/noisy/models/` directory.
 
-🎭 Behavior & Moods
-Noisy features 35 defined moods categorized into groups like Emotions, Body, Music, Environment, and Idle
-
-Contextual Reactions: He is an "occasional smoker"—reacting to the sound of a lighter at night by smoking
-He displays heart particles and sparkling eyes when your favorite music genre plays
-
-Time-Awareness: He yawns and stretches in the morning and reacts with an annoyed "shh!" gesture to loud noises late at night
-
-Fast-Track Logic: High-priority events (screams, sudden laughter, loud bangs) bypass the statistical smoothing of the mood accumulator to trigger immediate reactions
-
-
-🚀 Installation
-# Clone the repository to your Pi Zero 2 WH
-git clone https://github.com/smilez1985/noisy.git
-
-cd noisy
-
-# Run the automated installer (DietPi recommended)
-sudo bash install.sh
+### Installation
+1. **Clone the repo:**
+   ```bash
+   git clone https://github.com/Smilez1985/Noisy.git
+   cd Noisy
+   sudo bash install.sh
+   ```
+   
 The installer configures all services, shared memory segments, and the Noisy CLI (noisy log, noisy debug)
 
 🤝 Collaboration (Human in the Loop)
