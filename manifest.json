@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "install_id": "unique_uuid_here",
+  "files": [
+    "noisy_main.py",
+    "web_ui.py",
+    "config_manager.py",
+    "config.json",
+    "install.sh"
+  ],
+  "models": [
+    "sherpa-onnx-zipformer-small-audio-tagging-2024-04-15.onnx",
+    "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17-int8.onnx"
+  ],
+  "dependencies": ["flask", "requests", "numpy", "pyaudio"]
+}

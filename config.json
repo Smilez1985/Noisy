@@ -1,0 +1,36 @@
+{
+  "display": {
+    "brightness_day": 255,
+    "brightness_night": 80,
+    "auto_dim": true,
+    "night_mode_start": "22:00",
+    "night_mode_end": "06:00"
+  },
+  "visuals": {
+    "animation_speed_multiplier": 1.0,
+    "idle_breath_speed": 0.8,
+    "mood_colors": {
+      "MUSIC": [255, 165, 0],
+      "LAUGH": [255, 255, 0],
+      "SCARED": [255, 0, 0],
+      "TIRED": [150, 150, 200],
+      "LISTEN": [0, 255, 255]
+    }
+  },
+  "models": {
+    "active_model_type": "sense-voice",
+    "paths": {
+      "tagging": "/home/noisy/models/sherpa-onnx-zipformer-small-audio-tagging-2024-04-15.onnx",
+      "sense": "/home/noisy/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17-int8.onnx"
+    },
+    "download_status": {
+      "tagging": "ready",
+      "sense": "ready"
+    }
+  },
+  "system": {
+    "log_level": "INFO",
+    "debug_mode": false,
+    "last_save": "never"
+  }
+}

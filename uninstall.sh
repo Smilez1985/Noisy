@@ -1,128 +1,61 @@
 #!/bin/bash
-# ==========================================================
-# Noisy Uninstaller v5.0 (Orchestrator)
-# Ausfuehren als root: sudo bash uninstall.sh
-# ==========================================================
-set -e
+
+# Noisy Uninstaller - Manifest-Driven Edition
+# Target: Raspberry Pi Zero 2 WH / DietPi / Raspberry Pi OS
+
+set -e # Stop on error if something critical fails
 
 APP_DIR="/home/noisy/noisy-app"
-MODELS_DIR="/home/noisy/models"
+MANIFEST_FILE="$APP_DIR/manifest.json"
 
-echo "=== Noisy Uninstaller v5.0 ==="
-echo ""
-
-# 1. Services
-echo "[1/7] Services stoppen..."
-# BLE Beacon stoppen falls aktiv
-btmgmt rm-adv 1 2>/dev/null || true
-btmgmt power off 2>/dev/null || true
-systemctl stop noisy.service 2>/dev/null || true
-systemctl disable noisy.service 2>/dev/null || true
-rm -f /etc/systemd/system/noisy.service
-# Alte v4 Services
-systemctl stop noisy-face.service 2>/dev/null || true
-systemctl stop noisy-audio.service 2>/dev/null || true
-systemctl disable noisy-face.service 2>/dev/null || true
-systemctl disable noisy-audio.service 2>/dev/null || true
-rm -f /etc/systemd/system/noisy-face.service
-rm -f /etc/systemd/system/noisy-audio.service
-systemctl daemon-reload
-echo "  Services entfernt."
-
-# 2. SHM
-echo "[2/7] Shared Memory..."
-rm -f /dev/shm/noisy_mood /dev/shm/noisy_audio
-echo "  SHM bereinigt."
-
-# 3. CLI-Link + Sudoers
-echo "[3/7] CLI + Sudoers..."
-rm -f /usr/local/bin/noisy
-rm -f /etc/sudoers.d/noisy
-echo "  CLI-Link und Sudoers entfernt."
-
-# 4. Aliases
-echo "[4/7] Shell-Aliases..."
-ALIAS_FILE="/home/noisy/.bash_aliases"
-if [ -f "$ALIAS_FILE" ]; then
-    sed -i '/noisy/d' "$ALIAS_FILE" 2>/dev/null || true
-    [ ! -s "$ALIAS_FILE" ] && rm -f "$ALIAS_FILE"
-fi
-echo "  Aliases bereinigt."
-
-# 5. App-Dateien
-echo "[5/7] App-Dateien..."
-rm -f "$APP_DIR/noisy_orchestrator.py"
-rm -f "$APP_DIR/noisy_audio.py"
-rm -f "$APP_DIR/noisy_render.py"
-rm -f "$APP_DIR/noisy_config.py"
-rm -f "$APP_DIR/noisy_personality.py"
-rm -f "$APP_DIR/noisy_calibrate.py"
-rm -f "$APP_DIR/noisy_input.py"
-rm -f "$APP_DIR/noisy_beacon.py"
-rm -f "$APP_DIR/noisy_cli.sh"
-rm -f "$APP_DIR/debug.flag"
-rm -f "$APP_DIR/social.flag"
-rm -rf "$APP_DIR/moods"
-# Alte Dateien
-rm -f "$APP_DIR/noisy_moods.py" "$APP_DIR/noisy_debug.py"
-rm -f "$APP_DIR/audio_processor.py" "$APP_DIR/noisy_main.py" "$APP_DIR/noisy_idle.py"
-# Logs
-rm -f "$APP_DIR/noisy.log" "$APP_DIR/noisy.log."*
-rm -f "$APP_DIR/audio.log" "$APP_DIR/audio.log."*
-rm -f "$APP_DIR/debug.log"
-rm -f "$APP_DIR/calibration.json"
-rm -rf "$APP_DIR/__pycache__"
-echo "  Scripts und Logs entfernt."
-
-# 6. ALSA Config (optional)
-echo "[6/7] Audio-Config..."
-if [ -f "/etc/asound.conf" ] && grep -q "Noisy" /etc/asound.conf 2>/dev/null; then
-    rm -f /etc/asound.conf
-    echo "  ALSA Config entfernt."
-else
-    echo "  ALSA Config nicht von Noisy, ueberspringe."
+# Prüfen, ob das Manifest existiert
+if [ ! -f "$MANIFEST_FILE" ]; then
+    echo "❌ Error: manifest.json not found in $APP_DIR."
+    echo "I don't know what to uninstall. Please ensure you are running this from the correct directory."
+    exit 1
 fi
 
-# 7. Optionale Daten
-echo ""
-echo "[7/7] Optionale Daten:"
+# Auslesen der Daten aus dem Manifest mittels jq
+VERSION=$(jq -r '.version' "$MANIFEST_FILE")
+SERVICE=$(jq -r '.service' "$MANIFEST_FILE")
+FILES=($(jq -r '.files[]' "$MANIFEST_FILE"))
 
-if [ -f "$APP_DIR/personality.json" ]; then
-    AGE=$(python3 -c "
-import json, time
-with open('$APP_DIR/personality.json') as f:
-    d = json.load(f)
-print(f\"{(time.time() - d.get('birth_time', time.time())) / 86400:.1f}\")
-" 2>/dev/null || echo "?")
-    echo ""
-    read -p "  Persoenlichkeit loeschen? (Noisy ist $AGE Tage alt) [j/N]: " DEL_PERS
-    if [ "$DEL_PERS" = "j" ] || [ "$DEL_PERS" = "J" ]; then
-        rm -f "$APP_DIR/personality.json"
-        echo "  Persoenlichkeit geloescht."
-    else
-        echo "  Persoenlichkeit bleibt erhalten."
+echo "⚠️ Warning: This will completely remove Noisy v$VERSION and all associated data."
+read -p "Are you sure? (y/n): " confirm
+if [ "$confirm" != "y" ]; then
+    echo "Aborted."
+    exit 0
+fi
+
+echo "🗑️ Removing system services..."
+# Stoppe den Dienst falls aktiv
+if systemctl is-active --quiet "$SERVICE"; then
+    sudo systemctl stop "$SERVICE"
+fi
+
+# Deaktiviere und lösche die Systemd-Konfiguration
+sudo systemctl disable "$SERVICE" 2>/dev/null || true
+sudo rm -f "/etc/systemd/system/$SERVICE"
+sudo systemctl daemon-reload
+
+echo "🗑️ Removing core files..."
+for file in "${FILES[@]}"; do
+    FILE_PATH="$APP_DIR/$file"
+    if [ -f "$FILE_PATH" ]; then
+        echo "Removing $file..."
+        rm "$FILE_PATH"
     fi
+done
+
+echo "🗑️ Removing models directory..."
+if [ -d "$APP_DIR/models" ]; then
+    rm -rf "$APP_DIR/models"
 fi
 
-if [ -d "$MODELS_DIR" ] && [ "$(ls -A $MODELS_DIR 2>/dev/null)" ]; then
-    MODEL_SIZE=$(du -sh "$MODELS_DIR" 2>/dev/null | cut -f1)
-    echo ""
-    read -p "  KI-Modelle loeschen? ($MODEL_SIZE) [j/N]: " DEL_MODELS
-    if [ "$DEL_MODELS" = "j" ] || [ "$DEL_MODELS" = "J" ]; then
-        rm -rf "$MODELS_DIR"
-        echo "  Modelle geloescht."
-    else
-        echo "  Modelle bleiben (spart Download bei Neuinstall)."
-    fi
-fi
+# Lösche die Konfigurationsdateien zum Schluss
+rm -f "$APP_DIR/config.json"
+rm -f "$MANIFEST_FILE"
 
-echo ""
-echo "=== Noisy deinstalliert ==="
-echo ""
-echo "Noch vorhanden:"
-echo "  - install.sh + uninstall.sh (in $APP_DIR)"
-echo "  - Python-Pakete (sherpa-onnx, pyaudio, etc.)"
-echo "  - User 'noisy'"
-[ -f "$APP_DIR/personality.json" ] && echo "  - Persoenlichkeit"
-[ -d "$MODELS_DIR" ] && echo "  - KI-Modelle"
-echo ""
+echo "-------------------------------------------------------"
+echo "✅ Noisy v$VERSION has been completely removed."
+echo "-------------------------------------------------------"
