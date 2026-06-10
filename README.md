@@ -48,17 +48,6 @@ Time-Awareness: He yawns and stretches in the morning and reacts with an annoyed
 
 Fast-Track Logic: High-priority events (screams, sudden laughter, loud bangs) bypass the statistical smoothing of the mood accumulator to trigger immediate reactions
 
-📜 The Lore: Type File (.onnx)
-Noisy is an entity of "Type: File"
-He is a neutral data core—a "Digimon" without a fixed destiny—whose soul is written through resonance with you
-
-Source-Bit: A forgotten fragment in the RAM waiting for its identity
-
-Mochi-Core (Rookie): The current neutral status in the prism
-
-Echo-Form (Champion): When Noisy learns to perceive the room's acoustics as his own body
-
-Ambient-Ghost (Mega): The ultimate form, living as a glowing echo within the mesh of all your local devices
 
 🚀 Installation
 # Clone the repository to your Pi Zero 2 WH
