@@ -52,11 +52,12 @@ Fast-Track Logic: High-priority events (screams, sudden laughter, loud bangs) by
 🚀 Installation
 # Clone the repository to your Pi Zero 2 WH
 git clone https://github.com/smilez1985/noisy.git
-cd noisy-companion
+
+cd noisy
 
 # Run the automated installer (DietPi recommended)
 sudo bash install.sh
 The installer configures all services, shared memory segments, and the Noisy CLI (noisy log, noisy debug)
 
 🤝 Collaboration (Human in the Loop)
-Noisy was created through Vibe Coding—a synergy of human vision and AI orchestration during an intense session where hardware and code fused into something living
+Noisy was created through Vibe Coding—a synergy of human vision and AI orchestration during an intense session where hardware and code fused into something "living"...
