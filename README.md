@@ -62,7 +62,7 @@ Ambient-Ghost (Mega): The ultimate form, living as a glowing echo within the mes
 
 🚀 Installation
 # Clone the repository to your Pi Zero 2 WH
-git clone https://github.com/your-username/noisy-companion.git
+git clone https://github.com/smilez1985/noisy.git
 cd noisy-companion
 
 # Run the automated installer (DietPi recommended)
