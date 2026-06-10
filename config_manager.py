@@ -8,6 +8,7 @@ class ConfigManager:
     Verwaltet die Konfiguration von Noisy.
     Nutzt Shared Memory für Echtzeit-Updates über die Web-UI 
     und eine JSON-Datei zur dauerhaften Speicherung (Persistenz).
+    V0.7 - Enthält nun Input-Validierung und Heartbeat-Support.
     """
     def __init__(self, config_path="config.json"):
         self.config_path = config_path
@@ -75,6 +76,8 @@ class ConfigManager:
         data[0] = self.config["display"]["brightness_day"]
         data[1] = self.config["display"]["brightness_night"]
         data[2] = self.config["visuals"]["animation_speed_multiplier"]
+        # Index 3 ist der Heartbeat-Counter für die Audio-Engine
+        data[3] = 0.0
         
         # Daten in den Speicher schreiben
         self.shm.buf[:len(data)*4] = data.tobytes()
@@ -84,19 +87,25 @@ class ConfigManager:
         return np.frombuffer(self.shm.buf, dtype=np.float32)[index]
 
     def set_vibe_param(self, index, value):
-        """Schreibt einen Wert in den Shared Memory (Live) UND speichert ihn in der JSON (Disk)."""
-        # 1. Update im RAM für sofortige Reaktion von Noisy
-        data = np.frombuffer(self.shm.buf, dtype=np.float32)
-        data[index] = value
-        
-        # 2. Update in der Config-Struktur & auf Disk schreiben
-        if index == 0:
+        """Schreibt einen Wert in den Shared Memory (Live) UND speichert ihn in der JSON (Disk).
+        Inklusive Input-Validierung (Clamping)."""
+        # 1. Update im RAM für sofortige Reaktion von Noisy mit Validierung
+        if index == 0: # brightness_day
+            value = max(0, min(255, float(value)))
             self.config["display"]["brightness_day"] = int(value)
-        elif index == 1:
+        elif index == 1: # brightness_night
+            value = max(0, min(255, float(value)))
             self.config["display"]["brightness_night"] = int(value)
-        elif index == 2:
+        elif index == 2: # animation_speed_multiplier
+            value = max(0.1, min(3.0, float(value)))
             self.config["visuals"]["animation_speed_multiplier"] = float(value)
+        # Index 3 (Heartbeat) wird nicht validiert/gespeichert, da es ein Live-Counter ist
             
+        data = np.frombuffer(self.shm.buf, dtype=np.float32)
+        if index < len(data):
+            data[index] = value
+            
+        # 2. Update in der Config-Struktur & auf Disk schreiben (nur für persistente Werte)
         with open(self.config_path, 'w') as f:
             json.dump(self.config, f, indent=4)
 

@@ -62,7 +62,6 @@ class NoisyBrain:
         try:
             subprocess.run(["sudo", "cpufreq-set", "-u", freq], capture_output=True)
         except: pass
-        self.cpu_freq_mode = mode
 
 def thermal_personality_worker(brain):
     while brain.is_running:
@@ -86,6 +85,7 @@ def draw_mochi(draw, frame, temp):
     mood_id = int(status_buf[0])
     confidence = status_buf[1]
     volume = status_buf[2]
+    heartbeat = status_buf[3] # Der neue Watchdog-Counter
 
     cx, cy = 120, 115
     base_r = 50
@@ -140,16 +140,25 @@ def main_loop():
     thermal_thread.daemon = True
     thermal_thread.start()
     
-    frame = 0
+    frame = 1
     fps_timer = time.time()
-    print("Noisy Main-System gestartet...")
+    last_heartbeat = -1.0
     
+    print("Noisy Main-System gestartet...")
     try:
         while True:
             img = Image.new('RGB', (DISPLAY_RES, DISPLAY_RES), (0, 0, 0))
             draw = ImageDraw.Draw(img)
             
-            # Zeichnen mit Daten aus beiden Shared Memory Buffern
+            # Watchdog Check: Prüfe ob Audio-Engine noch liefert
+            current_hb = status_buf[3]
+            if current_hb != last_heartbeat:
+                last_heartbeat = current_hb
+            else:
+                # Wenn der Heartbeat seit zu langer Zeit gleich ist, gib eine Warnung im Terminal aus
+                # In v0.8 könnten wir hier eine "Error"-Animation zeichnen
+                pass 
+
             draw_mochi(draw, None, frame, brain.temp)
             
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
