@@ -1,3 +1,4 @@
+--- File: noisy_main.py ---
 #!/usr/bin/env python3
 import os
 import time
@@ -9,6 +10,12 @@ import numpy as np
 import st7789
 from PIL import Image, ImageDraw
 from datetime import datetime
+
+# Hardware-Bibliothek versuchen zu laden (für den Button)
+try:
+    import RPi.GPIO as GPIO
+except ImportError:
+    GPIO = None
 
 # Importe
 try:
@@ -29,17 +36,35 @@ try:
     status_shm = shared_memory.SharedMemory(name="noisy_status_buffer")
     status_buf = np.frombuffer(status_shm.buf, dtype=np.float32)
 except FileNotFoundError:
-    # Erstelle es, falls der Audio-Proz noch nicht läuft (Fallback auf 0)
+    # Erstelle es, falls der Audio-Proz noch nicht läuft
     status_shm = shared_memory.SharedMemory(name="noisy_status_buffer", create=True, size=1024)
     status_buf = np.frombuffer(status_shm.buf, dtype=np.float32)
 
-# Hardware Setup
+# Hardware Setup (Display)
 DISPLAY = st7789.ST7789(
     port=0, cs=0, dc=25, backlight=None,
     width=DISPLAY_RES, height=DISPLAY_RES, rotation=270,
     spi_speed_hz=40000000
 )
 DISPLAY.begin()
+
+# Hardware Setup (Button für Dev-Mode)
+dev_button_pin = config.config["system"]["hardware"]["dev_button_pin"]
+dev_mode_active = False
+
+if GPIO:
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(dev_button_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    # Thread für Button-Polling (einfachste Lösung für Set & Forget Stabilität)
+    def button_thread():
+        nonlocal dev_mode_active
+        while True:
+            if GPIO.input(dev_button_pin) == GPIO.LOW: # Button gedrückt
+                dev_mode_active = not dev_mode_active
+                config.set_vibe_param(4, 1.0 if dev_mode_active else 0.0)
+                time.sleep(0.5) # Debounce
+            time.sleep(0.1)
+    threading.Thread(target=button_thread, daemon=True).start()
 
 class NoisyBrain:
     def __init__(self):
@@ -71,21 +96,18 @@ def thermal_personality_worker(brain):
             brain.set_cpu_freq("low")
         elif temp < 60.0 and brain.mood == "TIRED":
             brain.mood = "IDLE"
-        
         time.sleep(2.0)
 
-def draw_mochi(draw, frame, temp):
-    # --- WERTE AUS DEN BUFFERN HOLES ---
-    # Von Config-Manager (Shared Memory 1)
+def draw_mochi(draw, frame, temp, dev_mode):
+    # --- WERTE AUS DEN BUFFERN HOLEN ---
     brightness_day = config.get_vibe_param(0)      
     brightness_night = config.get_vibe_param(1)     
     speed_mult = config.get_vibe_param(2)           
     
-    # Von Audio-Status (Shared Memory 2)
     mood_id = int(status_buf[0])
     confidence = status_buf[1]
     volume = status_buf[2]
-    heartbeat = status_buf[3] # Der neue Watchdog-Counter
+    heartbeat = status_buf[3]
 
     cx, cy = 120, 115
     base_r = 50
@@ -103,7 +125,7 @@ def draw_mochi(draw, frame, temp):
     current_brightness = brightness_night if is_night else brightness_day
     norm_bright = current_brightness / 255.0
 
-    # Animation-Parameter (Dynamisch über Speed Multiplier)
+    # Animation-Parameter
     breath = math.sin(frame * 0.15 * speed_mult) * 5
     
     # Mood Mapping Logik
@@ -134,6 +156,15 @@ def draw_mochi(draw, frame, temp):
     draw.ellipse([cx-20, eye_y-eye_h, cx-12, eye_y+eye_h], fill=(40,40,50))
     draw.ellipse([cx+12, eye_y-eye_h, cx+20, eye_y+eye_h], fill=(40,40,50))
 
+    # --- DEV MODE VISUALS ---
+    if dev_mode:
+        # Roter Rahmen um das Mochi
+        draw.rectangle([cx-(base_r+breath)-5, cy-(base_r+breath)*1.2-5, 
+                        cx+(base_r+breath)+5, cy+(base_r+breath)*1.3+5], outline=(255, 0, 0), width=3)
+        # Kleine Stats im Display (optional für Dev-Mode)
+        draw.text((10, 10), f"T:{temp:.1f} C", fill=(255, 255, 255))
+        draw.text((10, 20), f"M:{mood_id}", fill=(255, 255, 255))
+
 def main_loop():
     brain = NoisyBrain()
     thermal_thread = threading.Thread(target=thermal_personality_worker, args=(brain,))
@@ -155,11 +186,13 @@ def main_loop():
             if current_hb != last_heartbeat:
                 last_heartbeat = current_hb
             else:
-                # Wenn der Heartbeat seit zu langer Zeit gleich ist, gib eine Warnung im Terminal aus
-                # In v0.8 könnten wir hier eine "Error"-Animation zeichnen
+                # Logik für "Dead Engine" könnte hier rein
                 pass 
 
-            draw_mochi(draw, None, frame, brain.temp)
+            # Hole dev_mode Status aus Config-Manager (SHM Index 4)
+            dev_mode = config.get_vibe_param(4) > 0.5
+
+            draw_mochi(draw, frame, brain.temp, dev_mode)
             
             img = img.transpose(Image.FLIP_LEFT_RIGHT)
             DISPLAY.display(img)

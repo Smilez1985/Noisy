@@ -1,3 +1,4 @@
+--- File: config_manager.py ---
 import os
 import json
 import numpy as np
@@ -5,27 +6,25 @@ from multiprocessing import shared_memory
 
 class ConfigManager:
     """
-    Verwaltet die Konfiguration von Noisy.
-    Nutzt Shared Memory für Echtzeit-Updates über die Web-UI 
-    und eine JSON-Datei zur dauerhaften Speicherung (Persistenz).
-    V0.7 - Enthält nun Input-Validierung und Heartbeat-Support.
+    Verwaltet die Konfiguration von Noisy (V0.8).
+    Nutzt Shared Memory für Echtzeit-Updates und eine JSON-Datei zur Persistenz.
+    Unterstützt nun Logging-Pfade und Hardware-Button-Konfiguration.
     """
     def __init__(self, config_path="config.json"):
         self.config_path = config_path
         self.config = self._load_config()
         
-        # Shared Memory Name für UI-Parameter
+        # Shared Memory Name für UI-Parameter & Status
         self.shm_name = "noisy_vibe_params"
         
         try:
-            # Versuche, bestehenden Speicher zu öffnen (WebUI ist bereits offen)
+            # Versuche bestehenden Speicher zu öffnen
             self.shm = shared_memory.SharedMemory(name=self.shm_name)
         except FileNotFoundError:
-            # Wenn nicht vorhanden -> neuen erstellen
-            # Wir reservieren 1024 Bytes für UI-Parameter
+            # Neuer Speicher (1024 Bytes genug für alle Parameter)
             self.shm = shared_memory.SharedMemory(name=self.shm_name, create=True, size=1024)
         
-        # Initialisiere den Speicher mit aktuellen Werten aus der Config
+        # Initialisiere den Speicher mit aktuellen Werten
         self._sync_config_to_shm()
 
     def _load_config(self):
@@ -34,7 +33,7 @@ class ConfigManager:
             with open(self.config_path, 'r') as f:
                 return json.load(f)
         else:
-            # Standard-Konfiguration falls Datei fehlt
+            # Standard-Konfiguration V0.8
             return {
                 "display": {
                     "brightness_day": 255,
@@ -65,21 +64,29 @@ class ConfigManager:
                 "system": {
                     "log_level": "INFO",
                     "debug_mode": False,
-                    "last_save": "never"
+                    "last_save": "never",
+                    "logging": {
+                        "standard_path": "/var/log/noisy/noisy.log",
+                        "dev_log_dir": "/var/log/noisy/dev_logs/"
+                    },
+                    "hardware": {
+                        "dev_button_pin": 13,
+                        "auto_start": True
+                    }
                 }
             }
 
     def _sync_config_to_shm(self):
         """Schreibt alle aktuellen Config-Werte in den Shared Memory Block."""
-        # Wir nutzen ein Array aus Float32 Werten im Speicher:
+        # Index Mapping:
+        # 0: brightness_day, 1: brightness_night, 2: speed_mult, 3: heartbeat, 4: dev_mode_active
         data = np.zeros(100, dtype=np.float32)
         data[0] = self.config["display"]["brightness_day"]
         data[1] = self.config["display"]["brightness_night"]
         data[2] = self.config["visuals"]["animation_speed_multiplier"]
-        # Index 3 ist der Heartbeat-Counter für die Audio-Engine
-        data[3] = 0.0
+        data[3] = 0.0  # Heartbeat (wird von Audio-Engine befüllt)
+        data[4] = 1.0 if self.config["system"]["debug_mode"] else 0.0 # Dev Mode Flag
         
-        # Daten in den Speicher schreiben
         self.shm.buf[:len(data)*4] = data.tobytes()
 
     def get_vibe_param(self, index):
@@ -87,30 +94,32 @@ class ConfigManager:
         return np.frombuffer(self.shm.buf, dtype=np.float32)[index]
 
     def set_vibe_param(self, index, value):
-        """Schreibt einen Wert in den Shared Memory (Live) UND speichert ihn in der JSON (Disk).
-        Inklusive Input-Validierung (Clamping)."""
-        # 1. Update im RAM für sofortige Reaktion von Noisy mit Validierung
+        """Schreibt Live-Wert in SHM und persistiert ihn in die JSON."""
+        val = float(value)
+        
         if index == 0: # brightness_day
-            value = max(0, min(255, float(value)))
-            self.config["display"]["brightness_day"] = int(value)
+            val = max(0, min(255, val))
+            self.config["display"]["brightness_day"] = int(val)
         elif index == 1: # brightness_night
-            value = max(0, min(255, float(value)))
-            self.config["display"]["brightness_night"] = int(value)
+            val = max(0, min(255, val))
+            self.config["display"]["brightness_night"] = int(val)
         elif index == 2: # animation_speed_multiplier
-            value = max(0.1, min(3.0, float(value)))
-            self.config["visuals"]["animation_speed_multiplier"] = float(value)
-        # Index 3 (Heartbeat) wird nicht validiert/gespeichert, da es ein Live-Counter ist
+            val = max(0.1, min(3.0, val))
+            self.config["visuals"]["animation_speed_multiplier"] = float(val)
+        elif index == 4: # dev_mode_active (Flag für UI/Hardware)
+            val = 1.0 if val > 0.5 else 0.0
+            self.config["system"]["debug_mode"] = bool(val)
             
         data = np.frombuffer(self.shm.buf, dtype=np.float32)
         if index < len(data):
-            data[index] = value
+            data[index] = val
             
-        # 2. Update in der Config-Struktur & auf Disk schreiben (nur für persistente Werte)
+        # Persistenz auf Disk
         with open(self.config_path, 'w') as f:
             json.dump(self.config, f, indent=4)
 
     def get_full_config(self):
-        """Gibt die komplette Config zurück (für Web-UI oder Debug)."""
+        """Gibt die komplette Config zurück (für Web-UI)."""
         return self.config
 
     def close(self):

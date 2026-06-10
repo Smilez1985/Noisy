@@ -1,144 +1,140 @@
 #!/bin/bash
 
-# Noisy Full Installation Script - Registry & Versioning Edition
-# Target: Raspberry Pi Zero 2 WH / DietPi / Raspberry Pi OS
-# Version: 0.6
+# ==========================================================
+# Noisy Installer v0.8 (Production Ready)
+# Ausfuehren als root: sudo bash install.sh
+# ==========================================================
+set -e
 
-set -e # Stop on error
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
 
-VERSION="0.6"
-APP_DIR="/home/noisy/noisy-app"
-MANIFEST_FILE="$APP_DIR/manifest.json"
+echo -e "${GREEN}--- Noisy v0.8 Professional Installer ---${NC}"
 
-echo "🚀 Starting Noisy Installation v$VERSION..."
+# 0. Vorbereitungen
+if [ "$(id -u)" -ne 0 ]; then
+    echo "FEHLER: Bitte als root ausfuehren: sudo bash install.sh"
+    exit 1
+fi
 
-# --- 1. System Update & Core Tools ---
-echo "🔄 Updating system packages..."
-sudo apt-get update -y
-sudo apt-get upgrade -y
-# Hinzufügen von jq für die Manifest-Verarbeitung
-sudo apt-get install -y wget git bc python3-pip python3-dev ffmpeg \
-    libasound2-dev portaudio19-dev libportaudio2 libffi-dev jq
+# Projekt-Pfade (Dynamisch basierend auf Standort des Scripts)
+PROJECT_PATH=$(realpath $(dirname "$(readlink -f "$BASH_SOURCE")"))
+MODELS_DIR="/home/noisy/models"
 
-# --- 2. Python Dependencies ---
-echo "📦 Installing all required Python libraries..."
+# Sicherstellen, dass User 'noisy' existiert
+if ! id -u noisy &>/dev/null; then
+    echo "User 'noisy' wird erstellt..."
+    adduser --disabled-password --gecos "Noisy" noisy
+fi
+
+# 1. System-Abhaengigkeiten (Audio, Display, Models)
+echo "[1/9] Installiere System-Pakete..."
+apt update -qq
+apt install -y -qq python3-pip python3-dev portaudio19-dev \
+    libasound2-dev libsndfile1-dev wget tar bzip2 ffmpeg curl git
+
+# 2. Python Bibliotheken
+echo "[2/9] Installiere Python Pakete..."
 python3 -m pip install --upgrade pip
-python3 -m pip install numpy pyaudio cairo pillow sherpa-onnx librosa flask requests
+# Wir nutzen 'lgpio' für die Buttons und st7789 für das Display
+python3 -m pip install numpy pyaudio st7789 Pillow lgpio spidev
 
-# --- 3. Directory & Model Setup ---
-MODEL_DIR="$APP_DIR/models"
-if [ ! -d "$MODEL_DIR" ]; then
-    echo "📁 Creating models directory..."
-    sudo mkdir -p "$MODEL_DIR"
-    sudo chown -R $USER:$USER "$MODEL_DIR"
+# 3. Verzeichnisse & Berechtigungen
+echo "[3/9] Konfiguriere Verzeichnisse..."
+mkdir -p "$MODELS_DIR" /var/log/noisy/dev_logs
+chown -R noisy:noisy /home/noisy/
+chown -R noisy:noisy /var/log/noisy
+
+# 4. ALSA-Konfiguration (USB-Mikrofon als Default setzen)
+echo "[4/9] Konfiguriere Audio-Schnittstellen..."
+ALSA_CONF="/etc/asound.conf"
+if [ ! -f "$ALSA_CONF" ] || ! grep -q "pcm.!default" "$ALSA_CONF" 2>/dev/null; then
+    cat > "$ALSA_CONF" << 'ASOUND'
+pcm.!default {
+    type hw
+    card 0
+}
+ctl.!default {
+    type hw
+    card 0
+}
+ASOUND
+    echo "  ALSA Default auf Card 0 (USB-Mic) gesetzt."
 fi
 
-# Modell-Downloads (Idempotent)
-MODELS=(
-    "sherpa-onnx-zipformer-small-audio-tagging-2024-04-15.onnx"
-    "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17-int8.onnx"
-)
-
-URLS=(
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.9.0/sherpa-onnx-zipformer-small-audio-tagging-2024-04-15.onnx"
-    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.9.0/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17-int8.onnx"
-)
-
-for i in "${!MODELS[@]}"; do
-    FILENAME=${MODELS[$i]}
-    URL=${URLS[$i]}
-    TARGET="$MODEL_DIR/$FILENAME"
-
-    if [ ! -f "$TARGET" ]; then
-        echo "📥 Downloading $FILENAME..."
-        wget -q --show-progress -O "$TARGET" "$URL"
-    else
-        echo "✅ $FILENAME already exists."
-    fi
-done
-
-# --- 4. Hardware & Systemd Configuration ---
-echo "⚙️ Configuring CPU frequency rules..."
-if ! command -v cpufreq-set >/dev/null 2>&1; then
-    sudo apt-get install -y cpufrequtils
+# 5. Modell-Downloads (Die echten URLs aus v5.1 übernommen)
+echo "[5/9] Prüfe KI-Modelle..."
+MODEL_SUBDIR="sherpa-onnx-zipformer-small-audio-tagging-2024-04-15"
+# Tagging Modell
+if [ ! -f "$MODELS_DIR/$MODEL_SUBDIR/model.int8.onnx" ]; then
+    echo "  Lade Audio Tagging Modell herunter..."
+    cd "$MODELS_DIR"
+    wget -q --show-progress "https://github.com/k2-fsa/sherpa-onnx/releases/download/audio-tagging-models/${MODEL_SUBDIR}.tar.bz2"
+    tar xf "${MODEL_SUBDIR}.tar.bz2"
+    rm -f "${MODEL_SUBDIR}.tar.bz2"
+else
+    echo "  Modell bereits vorhanden."
 fi
 
-if ! grep -q "noisy ALL=(ALL:ALL)" /etc/sudoers.d/noisy 2>/dev/null; then
-    echo "noisy ALL=(ALL:ALL) NOPASSWD: cpufreq-set" | sudo tee /etc/sudoers.d/noisy > /null
-fi
+# 6. Sudoers & Berechtigungen (Für CPU Freq und Systemd ohne Passwort)
+echo "[6/9] Konfiguriere Sicherheits-Berechtigungen..."
+cat > /etc/sudoers.d/noisy << 'SUDOERS'
+noisy ALL=(ALL) NOPASSWD: /usr/bin/systemctl start noisy.service
+noisy ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop noisy.service
+noisy ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart noisy.service
+noisy ALL=(ALL) NOPASSWD: /usr/bin/systemctl status noisy.service
+noisy ALL=(ALL) NOPASSWD: /usr/bin/rm -f /dev/shm/noisy_mood /dev/shm/noisy_audio
+noisy ALL=(ALL) NOPASSWD: /usr/bin/btmgmt power on
+noisy ALL=(ALL) NOPASSWD: /usr/bin/btmgmt power off
+SUDOERS
+chmod 440 /etc/sudoers.d/noisy
 
-SERVICE_NAME="noisy-face.service"
-cat <<EOF > "$APP_DIR/$SERVICE_NAME"
+# CPU Frequenz Regel (udev)
+CPUFREQ_RULE="/etc/udev/rules.d/99-noisy-cpufreq.rules"
+cat > "$CPUFREQ_RULE" << 'UDEV'
+KERNEL=="cpu0", SUBSYSTEM=="cpu", ACTION=="add", \
+  RUN+="/bin/chmod 666 /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+UDEV
+# Sofort anwenden
+chmod 666 /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null || true
+
+# 7. Alte Reste bereinigen
+echo "[7/9] Bereinige alte Konfigurationen..."
+systemctl stop noisy.service 2>/dev/null || true
+rm -f /etc/systemd/system/noisy-face.service
+rm -f /etc/systemd/system/noisy-audio.service
+
+# 8. Systemd Service erstellen (V0.8 Orchestrator)
+echo "[8/9] Erstelle Noisy Service..."
+cat > /etc/systemd/system/noisy.service << EOF
 [Unit]
-Description=Noisy Mood Mochi Service
-After=network.target
+Description=Noisy Mochi AI Display
+After=network.target sound.target
 
 [Service]
-Type=simple
-User=$USER
-WorkingDirectory=$APP_DIR
-ExecStart=/usr/bin/python3 noisy_main.py
+ExecStartPre=+/bin/chmod 666 /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+ExecStart=/usr/bin/python3 $PROJECT_PATH/launch_noisy.py
+WorkingDirectory=$PROJECT_PATH
+StandardOutput=inherit
+StandardError=inherit
 Restart=always
 RestartSec=5
+User=noisy
+Environment=PYTHONUNBUFFERED=1
+
+# SHM aufräumen bei Stop
+ExecStopPost=/bin/rm -f /dev/shm/noisy_mood /dev/shm/noisy_audio
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-if [ ! -f "/etc/systemd/system/$SERVICE_NAME" ]; then
-    sudo mv "$APP_DIR/$SERVICE_NAME" /etc/systemd/system/$SERVICE_NAME
-fi
+# 9. Finalisierung
+echo "[9/9] Aktiviere Service..."
+systemctl daemon-reload
+systemctl enable noisy
+systemctl restart noisy
 
-sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME
-
-# --- 5. Versioning & Manifest Logic ---
-echo "📝 Processing version tags and manifest..."
-
-# Liste der Dateien, die eine interne Version besitzen sollen
-CORE_FILES=(
-    "noisy_main.py"
-    "audio_processor.py"
-    "config_manager.py"
-    "web_ui.py"
-)
-
-for file in "${CORE_FILES[@]}"; do
-    FILE_PATH="$APP_DIR/$file"
-    if [ -f "$FILE_PATH" ]; then
-        # Prüfe, ob die Datei schon eine Version hat und ob sie aktuell ist
-        CURRENT_VERSION=$(grep "^# Version=" "$FILE_PATH" | cut -d'"' -f2)
-        
-        if [[ "$CURRENT_VERSION" != "v$VERSION" ]]; then
-            echo "🔄 Updating version tag in $file to v$VERSION..."
-            # Nutze sed, um die Zeile zu ersetzen oder einzufügen
-            if grep -q "# Version=" "$FILE_PATH"; then
-                sed -i "s/^# Version=.*/# Version=\"v$VERSION\"/" "$FILE_PATH"
-            else
-                sed -i "1i # Version=\"v$VERSION\"" "$FILE_PATH"
-            fi
-        else
-            echo "✅ $file is already at v$VERSION."
-        fi
-    fi
-done
-
-# Erzeuge das Manifest (Registry) für den Uninstaller
-FILES_JSON=$(printf '%s\n' "${CORE_FILES[@]}" | jq -R . | jq -s -c .)
-MODELS_JSON=$(printf '%s\n' "${MODELS[@]}" | jq -R . | jq -s -c .)
-
-cat <<EOF > "$MANIFEST_FILE"
-{
-  "version": "$VERSION",
-  "install_id": "$(date +%s)",
-  "files": $FILES_JSON,
-  "models": $MODELS_JSON,
-  "service": "$SERVICE_NAME",
-  "install_date": "$(date)"
-}
-EOF
-
-echo "-------------------------------------------------------"
-echo "🎉 Installation of Noisy v$VERSION complete."
-echo "Registry has been updated. Uninstaller is ready."
-echo "-------------------------------------------------------"
+echo -e "${GREEN}=== Installation abgeschlossen! ===${NC}"
+echo "Noisy läuft jetzt im Hintergrund."
+echo "Status abfragen: systemctl status noisy"
