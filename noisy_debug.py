@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Noisy Debug Tool v5.0
+Noisy Debug Tool
 Live-Analyse per SSH: zeigt KI-Labels, Scores, Fast-Track,
 Accumulator, Beat, Personality, System-Monitor.
 
-Nutzt das V5 Mood-System (moods/ Paket) und noisy_config.
+Nutzt das Mood-System (moods/ Paket) und noisy_config.
 
 Starten:  python3 noisy_debug.py
           noisy stop   (vorher Noisy stoppen, sonst kaempfen
@@ -22,7 +22,7 @@ from collections import deque
 from datetime import datetime
 
 from noisy_config import (
-    APP_DIR, LOG_FILE,
+    APP_DIR, LOG_FILE, VERSION,
     MODEL_PATH, LABELS_PATH,
     SAMPLE_RATE, MODEL_RATE, CHUNK_SIZE, RMS_SILENCE, CONFIDENCE_MIN,
     TARGET_RMS, GAIN_MIN, GAIN_MAX, GAIN_SMOOTHING, GAIN_START, GAIN_SILENCE_RESET,
@@ -31,7 +31,7 @@ from noisy_config import (
     BORED_TIMEOUT, SLEEP_TIMEOUT,
 )
 
-# V5 Mood-System importieren (registriert alle Gruppen)
+# Mood-System importieren (registriert alle Gruppen)
 from moods import (
     get_mood_by_label, get_mood_name, get_mood_priority,
     is_fast_track, get_all_fingerprints, get_render_data,
@@ -129,7 +129,7 @@ class ChangeLogger:
         self.filepath = filepath
         self.last_sys_str = ""
         self.f = open(filepath, 'a')
-        self.log("=== Noisy Debug v5.0 gestartet ===")
+        self.log("=== Noisy Debug v%s gestartet ===" % VERSION)
 
     def ts(self):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -231,7 +231,7 @@ class BeatDetector:
 
 
 # ============================================================
-# Scoring (V5 - nutzt Mood-Registry)
+# Scoring (nutzt Mood-Registry)
 # ============================================================
 def score_labels(results):
     """
@@ -363,7 +363,7 @@ def rms_bar(rms, threshold, width=30):
 # ============================================================
 def main():
     print()
-    print("%s%s=== Noisy Debug Tool v5.0 ===%s" % (BOLD, CYAN, RESET))
+    print("%s%s=== Noisy Debug Tool v%s ===%s" % (BOLD, CYAN, VERSION, RESET))
     print("%sLive KI-Analyse | Fast-Track | Accumulator | Beat | System%s" % (BOLD, RESET))
     print()
 
@@ -556,7 +556,7 @@ def main():
             results = tagger.compute(tag_stream)
             inf_time = time.time() - t_start
 
-            # V5 Scoring
+            # Scoring
             cycle_scores, top_label, top_prob, fast_track_mood = score_labels(results)
 
             # Accumulator
