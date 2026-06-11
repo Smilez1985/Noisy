@@ -1,3 +1,9 @@
+
+
+
+
+
+
 # **🎭 Noisy | The Mood-Mochi**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -9,9 +15,12 @@
 > *It doesn't listen to commands. It listens to your life.*
 
 ---
+<img width="644" height="458" alt="image" src="https://github.com/user-attachments/assets/f146a4ec-3b9b-480d-8cf7-3dde9c38653a" />   
+---
 
-<img width="644" height="458" alt="image" src="https://github.com/user-attachments/assets/f146a4ec-3b9b-480d-8cf7-3dde9c38653a" />
+---
 
+https://github.com/user-attachments/assets/eaa5f762-81f1-40ed-a029-f727640b4aa6
 
 ---
 
