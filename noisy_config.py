@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Noisy Config v5.0 - Zentrale Konfiguration
+Noisy Config - Zentrale Konfiguration
 Wird von allen Modulen importiert.
 Aendern nur hier -> wirkt ueberall.
 
@@ -12,6 +12,7 @@ Privacy-Logging:
 """
 
 import os
+import json
 
 # ============================================================
 # Debug-Mode Erkennung
@@ -22,6 +23,19 @@ DEBUG_MODE = (
     os.environ.get('NOISY_DEBUG', '0') == '1'
     or os.path.exists(DEBUG_FLAG_FILE)
 )
+
+# ============================================================
+# Version (Single Source of Truth: manifest.json)
+# ============================================================
+def _load_version():
+    """Liest die Version aus manifest.json - alleinige Versionsquelle."""
+    try:
+        with open(os.path.join(APP_DIR, 'manifest.json'), 'r') as f:
+            return json.load(f).get('version', '0.0.0')
+    except Exception:
+        return '0.0.0'
+
+VERSION = _load_version()
 
 # ============================================================
 # Pfade
@@ -165,9 +179,6 @@ GENRE_AFFINITY_DECAY = 0.0003     # Pro Zyklus fuer ALLE Genres (langsam)
 GENRE_AFFINITY_THRESHOLD = 0.3    # Ab hier: Lieblingsgenre-Reaktion
 GENRE_AFFINITY_MAX = 1.0          # Maximale Affinitaet
 
-# ============================================================
-# Renderer
-# ============================================================
 # ============================================================
 # BLE Beacon (Social Mode)
 # ============================================================
