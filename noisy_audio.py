@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Noisy Audio Processor v5.0 (Schlank)
+Noisy Audio Processor (Schlank)
 Nur: Mikrofon -> Gain -> Inferenz -> Raw-Daten in SHM
 
 Entscheidungen (Mood, Fast-Track, Accumulator) macht der Orchestrator.
 Dieser Prozess laeuft als Subprocess, isoliert vom Orchestrator.
+
+Das aktive KI-Modell wird aus der RuntimeConfig (runtime_config.json)
+gelesen. So kann es ueber die Web-UI gewechselt werden: der Orchestrator
+aktualisiert die Config und startet diesen Subprocess neu.
 
 SHM Layout (geschrieben von Audio):
   Byte 0:     Anzahl Labels in diesem Zyklus (0-10)
@@ -26,11 +30,12 @@ import sherpa_onnx
 from logging.handlers import RotatingFileHandler
 
 from noisy_config import (
-    MODEL_PATH, LABELS_PATH, AUDIO_LOG_FILE, LOG_LEVEL, DEBUG_MODE,
+    AUDIO_LOG_FILE, LOG_LEVEL, DEBUG_MODE,
     SAMPLE_RATE, MODEL_RATE, CHUNK_SIZE, RMS_SILENCE,
     TARGET_RMS, GAIN_MIN, GAIN_MAX, GAIN_SMOOTHING, GAIN_START, GAIN_SILENCE_RESET,
     CONFIDENCE_MIN,
 )
+from noisy_runtime import RuntimeConfig
 
 # ============================================================
 # Konstanten
@@ -73,12 +78,12 @@ signal.signal(signal.SIGINT, signal_handler)
 # ============================================================
 # Label Name -> Index Lookup (fuer robuste SHM-Kodierung)
 # ============================================================
-def load_name_to_index():
+def load_name_to_index(labels_path):
     """Laedt class_labels_indices.csv als {display_name: index} dict."""
     import csv
     name2idx = {}
     try:
-        with open(LABELS_PATH, 'r') as f:
+        with open(labels_path, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 idx = int(row['index'])
@@ -89,7 +94,8 @@ def load_name_to_index():
         log.error("Label-Index laden fehlgeschlagen: %s", e)
     return name2idx
 
-NAME_TO_INDEX = load_name_to_index()
+# Wird in main() befuellt (haengt vom aktiven Modell ab)
+NAME_TO_INDEX = {}
 
 
 # ============================================================
@@ -161,19 +167,19 @@ def open_microphone():
 # ============================================================
 # Audio Tagger
 # ============================================================
-def create_tagger():
-    if not os.path.exists(MODEL_PATH):
-        log.critical("Modell nicht gefunden: %s", MODEL_PATH)
+def create_tagger(model_path, labels_path):
+    if not os.path.exists(model_path):
+        log.critical("Modell nicht gefunden: %s", model_path)
         sys.exit(1)
-    if not os.path.exists(LABELS_PATH):
-        log.critical("Labels nicht gefunden: %s", LABELS_PATH)
+    if not os.path.exists(labels_path):
+        log.critical("Labels nicht gefunden: %s", labels_path)
         sys.exit(1)
     config = sherpa_onnx.AudioTaggingConfig(
         model=sherpa_onnx.AudioTaggingModelConfig(
-            zipformer=sherpa_onnx.OfflineZipformerAudioTaggingModelConfig(model=MODEL_PATH),
+            zipformer=sherpa_onnx.OfflineZipformerAudioTaggingModelConfig(model=model_path),
             num_threads=2,
         ),
-        labels=LABELS_PATH,
+        labels=labels_path,
         top_k=MAX_LABELS,
     )
     tagger = sherpa_onnx.AudioTagging(config=config)
@@ -290,14 +296,25 @@ def write_shm(buf, results, rms_intensity, beat_speed, is_silence):
 # Main
 # ============================================================
 def main():
+    global NAME_TO_INDEX
+
     log.info("=" * 50)
-    log.info("Noisy Audio Processor v5.0 (Schlank)")
+    log.info("Noisy Audio Processor (Schlank)")
     log.info("=" * 50)
+
+    # Aktives Modell aus RuntimeConfig (ermoeglicht Modellwechsel via Web-UI)
+    rt = RuntimeConfig()
+    active = rt.get_active_model()
+    model_path = active['model']
+    labels_path = active['labels']
+    log.info("Aktives Modell: %s (%s)", active['name'], active['key'])
+
+    NAME_TO_INDEX = load_name_to_index(labels_path)
 
     shm = create_audio_shm()
     buf = shm.buf
 
-    tagger = create_tagger()
+    tagger = create_tagger(model_path, labels_path)
     pa, stream = open_microphone()
     beat_detector = BeatDetector(CHUNK_SIZE, SAMPLE_RATE)
 
