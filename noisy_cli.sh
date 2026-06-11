@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==========================================================
-# Noisy CLI v5.0 - Zentrales Kommando-Interface
+# Noisy CLI - Zentrales Kommando-Interface
 # Aufruf: noisy <befehl>
 # Installation: install.sh verlinkt nach /usr/local/bin/noisy
 # ==========================================================
@@ -8,6 +8,13 @@
 APP_DIR="/home/noisy/noisy-app"
 SERVICE="noisy.service"
 DEBUG_FLAG="$APP_DIR/debug.flag"
+
+# Version aus Manifest (Single Source of Truth)
+if command -v jq >/dev/null 2>&1 && [ -f "$APP_DIR/manifest.json" ]; then
+    VERSION=$(jq -r '.version // "unbekannt"' "$APP_DIR/manifest.json")
+else
+    VERSION="unbekannt"
+fi
 
 # Farben
 RED='\033[0;31m'
@@ -18,7 +25,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 usage() {
-    echo -e "${CYAN}${BOLD}Noisy v5.0 - CLI${NC}"
+    echo -e "${CYAN}${BOLD}Noisy v$VERSION - CLI${NC}"
     echo ""
     echo -e "Nutzung: ${GREEN}noisy <befehl>${NC}"
     echo ""
@@ -200,7 +207,7 @@ print()
         ;;
 
     version)
-        echo -e "${CYAN}Noisy v5.0 (Orchestrator)${NC}"
+        echo -e "${CYAN}Noisy v$VERSION (Orchestrator)${NC}"
         echo "  Architektur: Orchestrator -> Audio(Subprocess) + Renderer(Thread) + Input(GPIO)"
         echo "  Moods: 35 in 5 Gruppen"
         if [ -f "$APP_DIR/personality.json" ]; then
