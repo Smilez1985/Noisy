@@ -10,6 +10,10 @@
 
 ---
 
+![Uploading image.png…]()
+
+---
+
 ## **🌟 The Concept**
 Noisy is not a voice assistant like Alexa or Siri. It is a **digital shadow**.
 Sitting in its prism, Noisy observes the vibrations of your room:
