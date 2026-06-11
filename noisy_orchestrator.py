@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Noisy Orchestrator v5.0 - Masterprozess
+Noisy Orchestrator - Masterprozess
 
 Startet und ueberwacht:
   - noisy_audio.py als Subprocess (crash-isoliert)
   - NoisyRenderer als Thread (direkter Zugriff auf Mood-Daten)
+  - Web-UI (Flask) als Thread (Live-Parameter + Modell-Management)
 
 Entscheidet:
   - Fast-Track Impulse (SCARED, LAUGH, FART, EMPATHY)
@@ -39,7 +40,7 @@ def _unregister_shm(name):
         pass
 
 from noisy_config import (
-    APP_DIR, LOG_FILE, LOG_LEVEL, LABELS_PATH, BLE_ENABLED_FILE,
+    APP_DIR, LOG_FILE, LOG_LEVEL, LABELS_PATH, BLE_ENABLED_FILE, VERSION,
     SAMPLE_RATE, CONFIDENCE_MIN,
     BORED_TIMEOUT, SLEEP_TIMEOUT,
     ACCUMULATOR_WINDOW, GENRE_THRESHOLD, ACCUMULATOR_SILENCE_CLEAR,
@@ -71,6 +72,7 @@ from moods.idle import (
 from moods.musik import MUSIC, ROCK, JAZZ, HIPHOP, REGGAE, PARTY, CHILL, CLASSIC
 
 from noisy_personality import NoisyPersonality
+from noisy_runtime import RuntimeConfig
 
 try:
     from noisy_input import NoisyInput
@@ -196,11 +198,11 @@ signal.signal(signal.SIGINT, signal_handler)
 # ============================================================
 # Label-Index laden (Index -> Name Mapping)
 # ============================================================
-def load_label_index():
+def load_label_index(labels_path):
     """Laedt class_labels_indices.csv: {index: display_name}"""
     labels = {}
     try:
-        with open(LABELS_PATH, 'r') as f:
+        with open(labels_path, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 idx = int(row['index'])
@@ -336,7 +338,13 @@ def score_labels(labels):
 # ============================================================
 class NoisyOrchestrator:
     def __init__(self):
-        self.label_index = load_label_index()
+        # Laufzeit-Config (Web-UI): Helligkeit, Speed, aktives Modell.
+        # Wird mit Renderer (self.orch.rt) und Web-UI geteilt.
+        self.rt = RuntimeConfig()
+        active = self.rt.get_active_model()
+
+        # Label-Index passend zum AKTIVEN Modell laden
+        self.label_index = load_label_index(active['labels'])
         self.personality = NoisyPersonality(logger=log)
         self.accumulator = GenreAccumulator(ACCUMULATOR_WINDOW)
 
@@ -394,6 +402,10 @@ class NoisyOrchestrator:
         self.cube_mode = True           # Cube Mode (Display gespiegelt fuer Prism)
         self.is_social = False          # Social Mode (BLE Beacon)
         self.beacon_thread = None       # BLE Beacon Thread
+
+        # Web-UI (Flask Dashboard)
+        self.web_thread = None          # Web-UI Thread
+        self.model_switch_requested = False  # Web-UI: Audio mit neuem Modell neu starten
 
     # ----------------------------------------------------------
     # Mood-Mindestdauer + Priority-Override
@@ -503,6 +515,20 @@ class NoisyOrchestrator:
                 self.audio_shm.close()
             except Exception:
                 pass
+
+    # ----------------------------------------------------------
+    # Modellwechsel (von Web-UI angefordert)
+    # ----------------------------------------------------------
+    def switch_model(self):
+        """
+        Fordert einen KI-Modellwechsel an (von der Web-UI aufgerufen).
+        Das aktive Modell wurde von der Web-UI bereits in runtime_config.json
+        gesetzt. Der eigentliche Audio-Neustart passiert im Haupt-Thread
+        (run-Loop), um Thread-Races auf dem Audio-SHM zu vermeiden, das sonst
+        gleichzeitig von process_cycle() gelesen wuerde.
+        """
+        self.model_switch_requested = True
+        log.info("Modellwechsel angefordert (deferred auf Haupt-Thread)")
 
     # ----------------------------------------------------------
     # Mood-SHM (fuer externe Prozesse)
@@ -1061,7 +1087,7 @@ class NoisyOrchestrator:
     # ----------------------------------------------------------
     def run(self):
         log.info("=" * 50)
-        log.info("Noisy Orchestrator v5.0")
+        log.info("Noisy Orchestrator v%s", VERSION)
         log.info("=" * 50)
         log.info("Personality: Tag %.1f, %d Interaktionen, Trait: %s",
                  self.personality.get_age_days(),
@@ -1108,12 +1134,38 @@ class NoisyOrchestrator:
             log.error("Renderer konnte nicht gestartet werden: %s", e)
             log.info("Orchestrator laeuft ohne Renderer (headless)")
 
+        # Web-UI als Thread starten (Flask Dashboard, Port 8080)
+        try:
+            from web_ui import WebUIThread
+            self.web_thread = WebUIThread(self, self.rt)
+            self.web_thread.start()
+            log.info("Web-UI-Thread gestartet (http://<pi>:8080)")
+        except Exception as e:
+            log.error("Web-UI konnte nicht gestartet werden: %s", e)
+            log.info("Orchestrator laeuft ohne Web-UI weiter")
+            self.web_thread = None
+
         # Health-Check Timer
         last_audio_check = time.time()
         last_renderer_check = time.time()
 
         try:
             while running:
+                # Modellwechsel (von Web-UI angefordert) im Haupt-Thread ausfuehren.
+                # Hier statt im Flask-Thread, damit keine Race auf dem Audio-SHM
+                # mit process_cycle() entsteht.
+                if self.model_switch_requested:
+                    self.model_switch_requested = False
+                    active = self.rt.get_active_model()
+                    log.info("Modellwechsel: Audio neu starten -> %s", active['name'])
+                    self.label_index = load_label_index(active['labels'])
+                    self.stop_audio()
+                    self.audio_shm = None
+                    time.sleep(1)
+                    if not self.start_audio():
+                        log.error("Audio-Neustart nach Modellwechsel fehlgeschlagen!")
+                    last_audio_check = time.time()
+
                 self.process_cycle()
 
                 now = time.time()
