@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
-Noisy Face Renderer v5.0 (Komponentenbasiert)
+Noisy Face Renderer (Komponentenbasiert)
 Laeuft als Thread im Orchestrator, liest Mood-Daten direkt.
 
 Der Avatar wird aus wiederverwendbaren Komponenten zusammengebaut.
 Jeder Mood bringt nur seine ABWEICHUNGEN mit (Overrides).
 Default-Augen, Default-Mund etc. werden immer gleich gezeichnet
 wenn der Mood nichts anderes sagt.
+
+Live-Parameter (Web-UI) aus orch.rt:
+  - Software-Dimming (Tag/Nacht-Helligkeit, Auto-Dim, Nacht-Fenster)
+  - Animationsgeschwindigkeit (Speed-Multiplikator)
 
 Komponenten:
   1. Glow (5 Layer)
@@ -28,7 +32,8 @@ import math
 import random
 import numpy as np
 import st7789
-from PIL import Image, ImageDraw
+from datetime import datetime
+from PIL import Image, ImageDraw, ImageEnhance
 
 from noisy_config import (
     WIDTH, HEIGHT, TARGET_FPS, FRAME_TIME, THERMAL_PATH,
@@ -142,7 +147,7 @@ class ParticleSystem:
 class NoisyRenderer:
     def __init__(self, orchestrator):
         self.orch = orchestrator
-        self.frame = 0
+        self.frame = 0.0
         self.particles = ParticleSystem(max_particles=30)
 
         # Display Init (im Konstruktor statt Modul-Level)
@@ -188,6 +193,34 @@ class NoisyRenderer:
                     self.cpu_temp = int(f.read()) / 1000.0
             except Exception:
                 self.cpu_temp = 45.0
+
+    # ----------------------------------------------------------
+    # Brightness / Night-Window (Web-UI Live-Parameter)
+    # ----------------------------------------------------------
+    def _is_night(self, disp):
+        """True wenn die aktuelle Uhrzeit im Nacht-Fenster liegt."""
+        now = datetime.now().strftime("%H:%M")
+        start = disp.get("night_mode_start", "22:00")
+        end = disp.get("night_mode_end", "06:00")
+        if start <= end:
+            return start <= now < end
+        # Fenster ueber Mitternacht (z.B. 22:00 - 06:00)
+        return now >= start or now < end
+
+    def _apply_brightness(self, img):
+        """Software-Dimming: skaliert das Bild nach Tag-/Nacht-Helligkeit."""
+        rt = getattr(self.orch, 'rt', None)
+        if rt is None:
+            return img
+        disp = rt.get_display()
+        if disp.get("auto_dim", True) and self._is_night(disp):
+            brightness = disp.get("brightness_night", 80)
+        else:
+            brightness = disp.get("brightness_day", 255)
+        factor = max(0.0, min(1.0, brightness / 255.0))
+        if factor >= 0.999:
+            return img
+        return ImageEnhance.Brightness(img).enhance(factor)
 
     # ----------------------------------------------------------
     # Glow
@@ -371,7 +404,7 @@ class NoisyRenderer:
             for i in range(4):
                 kx = cx - 45 + i * 28
                 ky = cy + 42
-                pressed = (self.frame + i * 4) % 16 < 5
+                pressed = (int(self.frame) + i * 4) % 16 < 5
                 yoff = 3 if pressed else 0
                 draw.rectangle([kx, ky + yoff, kx + 22, ky + 10 + yoff],
                                outline=WHITE, width=2)
@@ -389,7 +422,7 @@ class NoisyRenderer:
             draw.rectangle([cx + 24, cy + 8, cx + 48, cy + 30],
                            fill=(240, 240, 240), outline=WHITE)
             draw.arc([cx + 46, cy + 12, cx + 58, cy + 24], -90, 90, fill=WHITE, width=2)
-            if self.frame % 12 < 6:
+            if int(self.frame) % 12 < 6:
                 draw.text((cx + 30, cy - 8), "~", fill=(200, 200, 200))
 
         elif acc_type == "watch":
@@ -428,7 +461,7 @@ class NoisyRenderer:
         draw.rectangle([12, 12, 228, 228], outline=GOLD, width=2)
 
         # Header
-        draw.text((20, 18), "IDENTITY: NOISY 5.0", fill=GOLD)
+        draw.text((20, 18), "IDENTITY: NOISY", fill=GOLD)
 
         # AEI-Balken
         personality = self.orch.personality
@@ -510,7 +543,7 @@ class NoisyRenderer:
         draw.ellipse([fx - 4, fy - 16, fx + 4, fy - 10], fill=(220, 180, 150))
 
         # "Shh" Text (pulsierend)
-        if self.frame % 20 < 14:
+        if int(self.frame) % 20 < 14:
             draw.text((cx + 18, fy - 8), "shh!", fill=(200, 200, 255))
 
         # Genervte Augenbrauen (schraeg nach innen)
@@ -546,6 +579,10 @@ class NoisyRenderer:
     # ----------------------------------------------------------
     def render(self):
         self.read_temperature()
+
+        # Laufzeit-Parameter (Speed) vom Orchestrator
+        rt = getattr(self.orch, 'rt', None)
+        speed = rt.get_speed() if rt is not None else 1.0
 
         # Mood-Daten vom Orchestrator lesen (Thread-safe durch GIL)
         mood_id = self.orch.render_mood_id
@@ -684,12 +721,12 @@ class NoisyRenderer:
             self.particles.spawn(px, py, p_type, p_color)
 
         # Thermal-Schweiss (bei >70°C, unabhaengig vom Mood)
-        if self.thermal_sweat and self.frame % 15 == 0:
+        if self.thermal_sweat and int(self.frame) % 15 == 0:
             sx = cx + random.randint(-25, 25)
             self.particles.spawn(sx, cy - 35, "sweat", (100, 200, 255))
 
         # Lieblingsgenre: Herz-Partikel + Augen-Funkeln
-        if self.orch.favorite_playing and self.frame % 10 == 0:
+        if self.orch.favorite_playing and int(self.frame) % 10 == 0:
             hx = cx + random.randint(-35, 35)
             self.particles.spawn(hx, cy - 45, "heart", (255, 100, 180))
 
@@ -749,6 +786,9 @@ class NoisyRenderer:
                                outline=(0, pulse, 0))
             draw.text((WIDTH // 2 - 12, 5), "BLE", fill=(0, 255, 0))
 
+        # --- BRIGHTNESS / NIGHT-DIMMING ---
+        img = self._apply_brightness(img)
+
         # --- DISPLAY ---
         if self.orch.cube_mode:
             # Prism/Cube: 180° Rotation (= gespiegelt + auf dem Kopf, Folded Optics)
@@ -756,13 +796,13 @@ class NoisyRenderer:
         else:
             # Normal: Direkte Anzeige (richtig herum)
             self.display.display(img)
-        self.frame += 1
+        self.frame += speed
 
     # ----------------------------------------------------------
     # RUN (als Thread)
     # ----------------------------------------------------------
     def run(self):
-        print("Noisy Renderer v5.0 gestartet (Komponentenbasiert)")
+        print("Noisy Renderer gestartet (Komponentenbasiert)")
         print(f"Target FPS: {TARGET_FPS}")
 
         fps_counter = 0
@@ -777,7 +817,7 @@ class NoisyRenderer:
                 if time.time() - fps_timer >= 10.0:
                     actual_fps = fps_counter / (time.time() - fps_timer)
                     mood_name = get_mood_name(self.orch.render_mood_id)
-                    print(f"FPS: {actual_fps:.1f} | Frame: {self.frame} | "
+                    print(f"FPS: {actual_fps:.1f} | Frame: {int(self.frame)} | "
                           f"Temp: {self.cpu_temp:.0f}C | Mood: {mood_name}")
                     fps_counter = 0
                     fps_timer = time.time()
