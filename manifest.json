@@ -1,7 +1,7 @@
 {
   "name": "Noisy",
-  "version": "5.0.0",
-  "description": "Ambient Mood-Mochi - Audio-getriebener emotionaler Begleiter (v5 Orchestrator)",
+  "version": "0.9.0",
+  "description": "Ambient Mood-Mochi - Audio-getriebener emotionaler Begleiter (Orchestrator-Architektur)",
   "service": "noisy.service",
   "app_dir": "/home/noisy/noisy-app",
   "models_dir": "/home/noisy/models",
