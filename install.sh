@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # ==========================================================
-# Noisy Installer v5.0 (Orchestrator Edition)
+# Noisy Installer (Orchestrator Edition)
+# Version wird zur Laufzeit aus manifest.json gelesen.
 # Ausfuehren als root aus dem Git-Checkout heraus:
 #     sudo bash install.sh
 #
-# Deployt den v5-Stack (noisy_orchestrator.py + moods/ + Module)
+# Deployt den Orchestrator-Stack (noisy_orchestrator.py + moods/ + Module)
 # nach /home/noisy/noisy-app und richtet den systemd-Service ein.
 # ==========================================================
 set -e
@@ -14,8 +15,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
-
-echo -e "${GREEN}--- Noisy v5.0 Orchestrator Installer ---${NC}"
 
 # ----------------------------------------------------------
 # 0. Root-Check
@@ -33,6 +32,15 @@ DEPLOY_DIR="/home/noisy/noisy-app"
 MODELS_DIR="/home/noisy/models"
 MODEL_SUBDIR="sherpa-onnx-zipformer-small-audio-tagging-2024-04-15"
 
+# Version aus dem Manifest lesen (Single Source of Truth).
+# Bewusst ohne jq, da jq erst weiter unten installiert wird.
+VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$SOURCE_DIR/manifest.json" 2>/dev/null | head -n1)
+if [ -z "$VERSION" ]; then
+    VERSION="unbekannt"
+fi
+
+echo -e "${GREEN}--- Noisy v$VERSION Orchestrator Installer ---${NC}"
 echo "  Quelle:  $SOURCE_DIR"
 echo "  Ziel:    $DEPLOY_DIR"
 
@@ -258,7 +266,7 @@ systemctl enable noisy.service
 systemctl restart noisy.service
 
 echo ""
-echo -e "${GREEN}=== Installation abgeschlossen! ===${NC}"
+echo -e "${GREEN}=== Installation von Noisy v$VERSION abgeschlossen! ===${NC}"
 echo "Noisy laeuft jetzt als Service."
 echo ""
 echo "  Status:       noisy status   (oder: systemctl status noisy)"
