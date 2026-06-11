@@ -1,6 +1,7 @@
 # **🎭 Noisy | The Mood-Mochi**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Version](https://img.shields.io/badge/version-0.9.0-blue)
 ![Hardware: Raspberry Pi Zero 2 WH](https://img.shields.io/badge/hardware-Pi%20Zero%202_WH-blue)
 
 **Noisy is a passive emotional companion that mirrors your environment through the prism of sound.**
@@ -10,70 +11,136 @@
 ---
 
 ## **🌟 The Concept**
-Noisy is not an AI assistant like Alexa or Siri. It is a **digital shadow**. 
-Sitting in its holographic prism, Noisy observes the vibrations of your room:
-- It **headbangs** when you blast Heavy Metal. 🤘
-- It **cringes and hides** during a horror movie jumpscare. 😱
-- It **sightly sways and feels sleepy** as the room goes quiet at night. 🥱
-- It **literally feels heat**: As the Pi works harder, Noisy becomes physically tired—its eyelids drooping as the CPU temperature rises (Thermal Personality Hack).
+Noisy is not a voice assistant like Alexa or Siri. It is a **digital shadow**.
+Sitting in its prism, Noisy observes the vibrations of your room:
+- It **headbangs** when you blast heavy metal. 🤘
+- It **cringes and hides** during a horror-movie jumpscare. 😱
+- It **gets sleepy** as the room goes quiet at night. 🥱
+- It **literally feels heat:** as the Pi works harder, Noisy gets physically
+  tired — its eyelids droop as the CPU temperature rises (Thermal Personality Hack).
+
+Over days and weeks, Noisy also develops a **personality**: it remembers the
+sounds it hears most, forms favourite music genres and shifts its baseline mood.
 
 ---
 
 ## **✨ Key Features**
-- **🧠 Real-time Emotion Detection:** Powered by `Sherpa-ONNX` & `SenseVoice`. Recognizes laughter, applause, music genres, and distinct emotions without heavy LLMs.
-- **🎨 Fluid Rendering:** Uses `PyCairo` for anti-aliased vector graphics for that smooth "Mochi-Blob" look.
-- **🌡️ Thermal Awareness:** A unique software governor maps real-time CPU temperatures to character behavior (Adaptive Fatigue).
-- **⚡ Zero-Copy Architecture:** Utilizes Python `Shared Memory` for low-latency communication between the audio inference engine and the rendering loop, optimized for 512MB RAM.
-- **🌌 Holographic Display:** Optimized specifically for the GamePi13 Prism Cube setup (SPI display with hardware rotation/flip).
+- **🧠 Real-time sound recognition:** Powered by `Sherpa-ONNX` with a
+  **Zipformer audio-tagging** model (int8). It maps AudioSet labels —
+  laughter, applause, music, animals, alarms and more — onto **35 moods**
+  in 5 groups, without a heavy LLM.
+- **🎭 Adaptive personality (AEI):** four axes (energy, cheerful, shy,
+  affection) that evolve over time via genre affinity, daily sound memory
+  and slow decay — inspired by the Moflin concept.
+- **🎨 Component-based rendering:** Uses `Pillow` (PIL) to assemble the
+  avatar from reusable components (body, eyes, mouth, hair, accessories,
+  particles), so each mood only defines its overrides.
+- **🌡️ Thermal awareness:** CPU temperature is mapped to character
+  behaviour (drooping eyes, sweat particles) and to CPU frequency capping.
+- **⚡ Zero-copy architecture:** Shared Memory carries label/mood data
+  between the audio subprocess and the orchestrator, optimized for the
+  Pi Zero 2's limited RAM.
+- **📡 Social Mode (BLE):** broadcasts Noisy's personality state as a BLE
+  beacon (visible e.g. with nRF Connect).
+- **🌌 Prism/Cube display:** ST7789 240x240 SPI output with an optional
+  180° rotation for the floating-hologram prism effect.
+- **🔒 Privacy-first:** no cloud, no tracking; logs default to a RAM disk
+  (`/tmp`) and only touch the SD card in debug mode.
 
 ---
 
 ## **🛠 Hardware Stack**
-- **Host:** Raspberry Pi Zero 2 WH (DietPi Headless)
+- **Host:** Raspberry Pi Zero 2 WH (DietPi, headless)
 - **Display:** Waveshare GamePi13 (ST7789, 240x240 SPI)
-- **Optics:** Prism Cube for the floating hologram effect
-- **Audio:** USB Mini Microphone
+- **Optics:** Prism cube for the floating-hologram effect (optional)
+- **Audio:** USB mini microphone
+
+---
+
+## **🧩 Architecture**
+Noisy runs as a single orchestrated service:
+
+```
+noisy_orchestrator.py  (master process)
+  ├── noisy_audio.py    (subprocess, crash-isolated → Shared Memory)
+  ├── noisy_render.py   (thread → ST7789 display)
+  └── noisy_input.py    (GPIO buttons, GamePi13)
+```
+
+The orchestrator handles fast-track impulses, genre fingerprints,
+accumulator-based mood smoothing, context transitions and personality
+updates. Moods live in the `moods/` package as a registry of overrides.
 
 ---
 
 ## **🚀 Getting Started**
 
 ### Prerequisites
-- A Raspberry Pi Zero 2 WH with DietPi installed.
-- Access via SSH.
-- The models must be placed in the `/home/noisy/models/` directory.
+- A Raspberry Pi Zero 2 WH with DietPi installed and SSH access.
+- A USB microphone and the GamePi13 (ST7789) display.
 
 ### Installation
-1. **Clone the repo:**
-   ```bash
-   git clone https://github.com/Smilez1985/Noisy.git
-   cd Noisy
-   ```
-   
-The installer configures all services, shared memory segments, and the Noisy CLI (noisy log, noisy debug)
+The installer deploys the app to `/home/noisy/noisy-app`, downloads the
+AI model automatically, installs dependencies and registers the systemd
+service plus the `noisy` CLI.
 
-Run the installer: The script sets up cpufreq rules for frequency capping, installs dependencies, and configures systemd autostart.
-
- ```
-chmod +x install.sh
+```bash
+git clone https://github.com/Smilez1985/Noisy.git
+cd Noisy
 sudo bash install.sh
- ```
+```
 
-Debug Mode: Test if the AI is recognizing your sounds correctly before starting the full experience:
- ```
-python3 noisy_debug.py
- ```
-**🎨 Customization & Vibe Coding**
-Noisy was built for makers. You can change its personality without touching a single line of core logic:
+After installation, calibrate once in a quiet room (records 15 s of
+ambient noise):
 
-Modify Moods: Edit vibe_db.json to map different sounds (e.g., "Dog Bark" or "Fart") to unique animations.
-New Shapes: Modify the draw_mochi function in noisy_main.py to turn the blob into a tree, a flame, or any other vector shape.
+```bash
+noisy calibrate
+```
 
-**⚖️ Philosophy**
-Noisy is an experiment in Ambient Consciousness. It is designed to be transparent: no cloud data, no hidden tracking. It exists only to mirror your vibe—it is a "Type File" that evolves with your environment.
+---
 
-**🤝 Collaboration (Human in the Loop)**
-Noisy was created through Vibe Coding—a synergy of human vision and AI orchestration during an intense session where hardware and code fused into something "living"...
+## **🎛 CLI**
+Everything is controlled through the `noisy` command:
+
+| Command         | Description                                  |
+| --------------- | -------------------------------------------- |
+| `noisy status`  | Service status + debug state                 |
+| `noisy log`     | Follow the live log                          |
+| `noisy debug`   | Live AI analysis (labels, scores, beat)      |
+| `noisy personality` | Show the AEI personality values          |
+| `noisy moods`   | List all moods and label coverage            |
+| `noisy calibrate` | Re-run room calibration                    |
+| `noisy restart` / `stop` / `start` | Service control           |
+| `noisy version` | Show version and architecture                |
+| `noisy uninstall` | Manifest-driven removal                    |
+
+> **Note:** Stop the service with `noisy stop` before running
+> `noisy debug` — otherwise both processes fight over the microphone.
+
+---
+
+## **🎨 Customization**
+Noisy is built for makers. You can change its personality without touching
+the core logic:
+
+- **Moods & sound mapping:** edit the files in the `moods/` package
+  (e.g. `moods/idle.py`, `moods/musik.py`). Each mood maps AudioSet labels
+  to a mood ID and defines body colour, physics, particles and accessories.
+- **Look & animation:** adjust the `draw_*` methods in `noisy_render.py`
+  to reshape the blob or add new accessories.
+- **Tuning:** all thresholds, timeouts and gains live in `noisy_config.py`.
+
+---
+
+## **⚖️ Philosophy**
+Noisy is an experiment in **ambient consciousness**. It is designed to be
+transparent: no cloud data, no hidden tracking. It exists only to mirror
+your vibe — an entity that evolves with its environment.
+
+---
+
+## **🤝 Collaboration (Human in the Loop)**
+Noisy was created through *Vibe Coding* — a synergy of human vision and AI
+orchestration, where hardware and code fused into something "living".
 
 Made with **❤️** by *Smilez1985*
-
