@@ -83,7 +83,7 @@ fi
 
 python3 -m pip install --upgrade $PIP_FLAGS pip
 python3 -m pip install $PIP_FLAGS \
-    numpy pyaudio sherpa-onnx st7789 Pillow lgpio spidev
+    numpy pyaudio sherpa-onnx st7789 Pillow lgpio spidev flask
 
 # ----------------------------------------------------------
 # 5. Deploy: v5-Artefakte nach DEPLOY_DIR kopieren
@@ -102,6 +102,8 @@ V5_FILES=(
     "noisy_config.py"
     "noisy_calibrate.py"
     "noisy_debug.py"
+    "noisy_runtime.py"
+    "web_ui.py"
     "noisy_cli.sh"
     "uninstall.sh"
     "manifest.json"
@@ -272,6 +274,10 @@ echo ""
 echo "  Status:       noisy status   (oder: systemctl status noisy)"
 echo "  Live-Log:     noisy log"
 echo "  Live-Analyse: noisy debug"
+echo ""
+echo -e "${YELLOW}Web-Dashboard:${NC} im Browser erreichbar unter"
+echo -e "      ${GREEN}http://<pi-ip>:8080${NC}"
+echo "  (Helligkeit Tag/Nacht, Animation-Speed, Nacht-Fenster, Modell-Management)"
 echo ""
 echo -e "${YELLOW}WICHTIG:${NC} Fuer optimale Erkennung jetzt einmal kalibrieren"
 echo "  (15s Stille noetig, Mikrofon angeschlossen):"
