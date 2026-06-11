@@ -35,6 +35,10 @@ sounds it hears most, forms favourite music genres and shifts its baseline mood.
 - **🎨 Component-based rendering:** Uses `Pillow` (PIL) to assemble the
   avatar from reusable components (body, eyes, mouth, hair, accessories,
   particles), so each mood only defines its overrides.
+- **🎛️ Live web dashboard:** A built-in Flask dashboard (port `8080`) lets
+  you adjust day/night brightness, animation speed and the night-mode window
+  live, and manage the AI model — download additional Sherpa-tagging models
+  and switch the active one at runtime, no SSH required.
 - **🌡️ Thermal awareness:** CPU temperature is mapped to character
   behaviour (drooping eyes, sweat particles) and to CPU frequency capping.
 - **⚡ Zero-copy architecture:** Shared Memory carries label/mood data
@@ -64,12 +68,15 @@ Noisy runs as a single orchestrated service:
 noisy_orchestrator.py  (master process)
   ├── noisy_audio.py    (subprocess, crash-isolated → Shared Memory)
   ├── noisy_render.py   (thread → ST7789 display)
+  ├── web_ui.py         (thread → Flask dashboard on :8080)
   └── noisy_input.py    (GPIO buttons, GamePi13)
 ```
 
 The orchestrator handles fast-track impulses, genre fingerprints,
 accumulator-based mood smoothing, context transitions and personality
 updates. Moods live in the `moods/` package as a registry of overrides.
+The renderer and the web dashboard share a single thread-safe runtime
+config, so dashboard changes take effect on the next rendered frame.
 
 ---
 
@@ -96,6 +103,27 @@ ambient noise):
 ```bash
 noisy calibrate
 ```
+
+---
+
+## **🎛 Web Dashboard**
+Once Noisy is running, open the dashboard in any browser on the same network:
+
+```
+http://<pi-ip>:8080
+```
+
+From there you can, without touching the command line:
+- adjust **day/night brightness** and **animation speed** live (changes apply
+  immediately),
+- set the **night-mode window** and toggle **auto-dim** (persisted across
+  reboots),
+- **manage AI models** — download additional Sherpa audio-tagging models
+  (`.tar.bz2`) and switch the active model at runtime. Downloads are validated
+  (https only, size-limited, path-traversal-safe) before being registered.
+
+The built-in Zipformer tagging model is always available as a fallback and
+cannot be removed.
 
 ---
 
