@@ -401,6 +401,7 @@ class NoisyOrchestrator:
         self.is_debug = False           # Debug-Mode (roter Rahmen)
         self.cube_mode = True           # Cube Mode (Display gespiegelt fuer Prism)
         self.is_social = False          # Social Mode (BLE Beacon)
+        self.reset_warning_until = 0.0   # Web-UI Passwort-Reset Warnung (Renderer-Overlay)
         self.beacon_thread = None       # BLE Beacon Thread
 
         # Web-UI (Flask Dashboard)
@@ -664,6 +665,24 @@ class NoisyOrchestrator:
     def night_annoyed(self):
         """True wenn Noisy gerade nachts genervt aufgewacht ist."""
         return time.time() < self.night_annoyed_until
+
+    # ----------------------------------------------------------
+    # Passwort-Reset Warnung (Web-UI -> Display-Overlay)
+    # ----------------------------------------------------------
+    @property
+    def reset_warning(self):
+        """True solange die Reset-Warnung auf dem Display laeuft."""
+        return time.time() < self.reset_warning_until
+
+    def show_reset_warning(self, seconds):
+        """Zeigt eine Passwort-Reset-Warnung mit Countdown auf dem Display.
+
+        Wird vom Web-UI aufgerufen, sobald ein Passwort-Reset bestaetigt
+        wurde. Der Renderer liest reset_warning_until und zeichnet das
+        Overlay (orange pulsierender Rahmen + Countdown).
+        """
+        self.reset_warning_until = time.time() + float(seconds)
+        log.warning("Display: Passwort-Reset-Warnung fuer %ss", seconds)
 
     # ----------------------------------------------------------
     # Sound Memory (taegliches Kurzzeitgedaechtnis)

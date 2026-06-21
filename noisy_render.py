@@ -786,6 +786,18 @@ class NoisyRenderer:
                                outline=(0, pulse, 0))
             draw.text((WIDTH // 2 - 12, 5), "BLE", fill=(0, 255, 0))
 
+        # Layer 16: PASSWORT-RESET Warnung (orange pulsierend + Countdown)
+        reset_remaining = getattr(self.orch, 'reset_warning_until', 0) - time.time()
+        if reset_remaining > 0:
+            pulse = int(120 + 135 * abs(math.sin(self.frame * 0.4)))
+            for i in range(8):
+                draw.rectangle([i, i, WIDTH - 1 - i, HEIGHT - 1 - i],
+                               outline=(pulse, pulse // 3, 0))
+            draw.text((WIDTH // 2 - 52, HEIGHT // 2 - 30), "PASSWORT", fill=(255, 90, 0))
+            draw.text((WIDTH // 2 - 34, HEIGHT // 2 - 8), "RESET", fill=(255, 90, 0))
+            draw.text((WIDTH // 2 - 30, HEIGHT // 2 + 18),
+                      "in %ds" % int(reset_remaining + 0.999), fill=(255, 220, 0))
+
         # --- BRIGHTNESS / NIGHT-DIMMING ---
         img = self._apply_brightness(img)
 

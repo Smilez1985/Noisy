@@ -13,6 +13,7 @@ parallel lesen/schreiben. Speichern erfolgt atomar (tmp + os.replace).
 Enthaelt:
   - display:  Helligkeit Tag/Nacht, Auto-Dim, Nacht-Zeitfenster
   - visuals:  Animationsgeschwindigkeit
+  - server:   HTTPS an/aus (Self-Signed, greift nach Service-Neustart)
   - models:   Registry verfuegbarer KI-Modelle + aktives Modell
 """
 
@@ -51,6 +52,9 @@ DEFAULTS = {
     },
     "visuals": {
         "animation_speed_multiplier": 1.0,
+    },
+    "server": {
+        "https": False,
     },
     "models": {
         "active": DEFAULT_MODEL_KEY,
@@ -98,6 +102,7 @@ class RuntimeConfig:
         data = {
             "display": dict(DEFAULTS["display"]),
             "visuals": dict(DEFAULTS["visuals"]),
+            "server": dict(DEFAULTS["server"]),
             "models": {
                 "active": DEFAULTS["models"]["active"],
                 "registry": dict(DEFAULTS["models"]["registry"]),
@@ -110,6 +115,12 @@ class RuntimeConfig:
                 data = _deep_merge(data, on_disk)
         except Exception:
             pass
+
+        # Sicherstellen, dass die server-Sektion existiert (Forward-Compat)
+        if "server" not in data or not isinstance(data["server"], dict):
+            data["server"] = dict(DEFAULTS["server"])
+        if "https" not in data["server"]:
+            data["server"]["https"] = DEFAULTS["server"]["https"]
 
         # Das eingebaute Default-Modell muss IMMER vorhanden sein
         if DEFAULT_MODEL_KEY not in data["models"]["registry"]:
@@ -205,6 +216,25 @@ class RuntimeConfig:
     def get_speed(self):
         with self._lock:
             return self._data["visuals"]["animation_speed_multiplier"]
+
+    # ----------------------------------------------------------
+    # Server (HTTPS-Toggle)
+    # Greift erst nach Neustart des Web-Servers/Service, da TLS beim
+    # Start gebunden wird (vgl. WebUIThread).
+    # ----------------------------------------------------------
+    def get_server(self):
+        with self._lock:
+            return dict(self._data["server"])
+
+    def get_https(self):
+        with self._lock:
+            return bool(self._data["server"].get("https", False))
+
+    def set_https(self, value):
+        with self._lock:
+            self._data["server"]["https"] = bool(value)
+            self.save()
+            return self._data["server"]["https"]
 
     # ----------------------------------------------------------
     # Modell-Registry

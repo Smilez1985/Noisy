@@ -40,6 +40,8 @@ usage() {
     echo "  debug           Live KI-Analyse (Labels, Scores, Beat)"
     echo "  debug-on       Debug-Modus AN (Log auf SD)"
     echo "  debug-off      Debug-Modus AUS (Log in /tmp)"
+    echo "  reset-pw       Web-UI Admin-Passwort zuruecksetzen (nur Passwort)"
+    echo "  https on|off   Dashboard-HTTPS (Self-Signed) ein/aus"
     echo "  uninstall      Noisy deinstallieren"
     echo "  version        Version anzeigen"
     echo ""
@@ -196,6 +198,44 @@ print()
         rm -f "$DEBUG_FLAG"
         sudo systemctl restart "$SERVICE"
         echo -e "${GREEN}Debug-Modus AUS${NC} - Log nur in /tmp"
+        ;;
+
+    reset-pw)
+        echo -e "${YELLOW}Setze Web-UI Admin-Passwort zurueck (nur das Passwort,"
+        echo -e "Personality/Config/Modelle bleiben unangetastet)...${NC}"
+        python3 -c "
+import sys
+sys.path.insert(0, '$APP_DIR')
+from noisy_auth import AuthManager
+AuthManager().reset_password()
+print('Passwort-Material geloescht.')
+"
+        sudo systemctl restart "$SERVICE"
+        echo -e "${GREEN}Noisy neu gestartet.${NC} Beim naechsten Web-Login ein neues Passwort setzen."
+        ;;
+
+    https)
+        case "${2}" in
+            on|ON|an|AN)   PYVAL="True";  STATE="AN";;
+            off|OFF|aus|AUS) PYVAL="False"; STATE="AUS";;
+            *)
+                echo -e "${YELLOW}Nutzung: noisy https on|off${NC}"
+                exit 1
+                ;;
+        esac
+        python3 -c "
+import sys
+sys.path.insert(0, '$APP_DIR')
+from noisy_runtime import RuntimeConfig
+RuntimeConfig().set_https($PYVAL)
+print('HTTPS = $STATE')
+"
+        sudo systemctl restart "$SERVICE"
+        if [ "$PYVAL" = "True" ]; then
+            echo -e "${GREEN}HTTPS aktiviert.${NC} Verbinde unter https://<adresse>:8080 (Self-Signed-Warnung einmal bestaetigen)."
+        else
+            echo -e "${GREEN}HTTPS deaktiviert.${NC} Verbinde unter http://<adresse>:8080"
+        fi
         ;;
 
     uninstall)

@@ -187,6 +187,63 @@ BLE_BEACON_INTERVAL = 10      # Sekunden zwischen Beacon-Updates
 BLE_NOISY_SIGNATURE = b'NO'   # 2-Byte Signatur zum Erkennen
 
 # ============================================================
+# Web-UI: Netzwerk
+# Headless -> Dashboard ist im LAN erreichbar (0.0.0.0).
+# Geschuetzt durch Admin-Login (siehe noisy_auth.py).
+# ============================================================
+WEB_HOST = '0.0.0.0'
+WEB_PORT = 8080
+
+# ============================================================
+# Web-UI: Authentifizierung & TLS
+# Diese Dateien liegen auf der SD (ueberleben Reboot).
+# auth.json enthaelt Passwort-Hash + Session-Secret.
+# ============================================================
+AUTH_FILE = os.path.join(APP_DIR, 'auth.json')
+TLS_CERT_FILE = os.path.join(APP_DIR, 'noisy_cert.pem')
+TLS_KEY_FILE = os.path.join(APP_DIR, 'noisy_key.pem')
+
+# Login-Sicherheit (Brute-Force-Bremse)
+LOGIN_MAX_ATTEMPTS = 5          # Fehlversuche pro IP bis Sperre
+LOGIN_LOCKOUT_SECONDS = 300     # Sperrdauer nach zu vielen Fehlversuchen
+RESET_COUNTDOWN_SECONDS = 20    # sichtbarer Countdown vor Passwort-Reset
+
+# Magische Passwort-Reset-Phrasen (ins PASSWORT-Feld eingeben, kein Button).
+# Bewusst offen/oeffentlich: Noisy ist ein dediziertes LAN-Geraet ohne
+# Port nach aussen. Die Sicherheit kommt aus der Haertung der Endpoints
+# (ein eingeloggter Fremder kann keinen echten Schaden anrichten), nicht
+# aus der Geheimhaltung dieser Phrasen.
+PASSWORD_RESET_PHRASES = (
+    'passwort_vergessen',
+    'passwort vergessen',
+    'forgot password',
+    'cant remember password',
+)
+
+# ============================================================
+# Web-UI: Modell-Download (/download) - Sicherheit
+# Host-Allowlist ist editierbar. Die ECHTE SSRF-Grenze ist die
+# IP-Sperre in noisy_netsec.py: URLs, die auf private/loopback/
+# link-local Adressen aufloesen, werden IMMER abgelehnt - auch
+# nach Redirects. Damit kann der Pi nicht als Proxy ins LAN
+# missbraucht werden, selbst wenn die Allowlist weit offen ist.
+# ============================================================
+MODEL_DOWNLOAD_ALLOWLIST = (
+    'github.com',
+    'objects.githubusercontent.com',
+    'release-assets.githubusercontent.com',
+    'raw.githubusercontent.com',
+    'huggingface.co',
+    'cdn-lfs.huggingface.co',
+    'cdn-lfs.hf.co',
+    'cdn-lfs-us-1.huggingface.co',
+)
+MODEL_DOWNLOAD_MAX_BYTES = 500 * 1024 * 1024        # 500 MB pro Datei
+MODEL_DOWNLOAD_MIN_FREE_BYTES = 200 * 1024 * 1024   # mind. freier Platz, sonst Abbruch
+MODEL_DOWNLOAD_MAX_REDIRECTS = 5                     # max. Redirect-Hops (jeder neu geprueft)
+MODEL_DOWNLOAD_TIMEOUT = 60                          # Sekunden pro Verbindung
+
+# ============================================================
 # Renderer
 # ============================================================
 WIDTH = 240
